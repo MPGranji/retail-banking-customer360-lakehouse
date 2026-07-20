@@ -1,7 +1,8 @@
 """End-to-end SCD2 correctness test against an isolated Iceberg table.
 
-Run inside the Spark image:
-    spark-submit --master spark://spark-master:7077 \
+Run from the Jupyter container so driver and worker both use Python 3.8:
+    docker exec jupyter /opt/spark/bin/spark-submit \
+      --master spark://spark-master:7077 \
       /opt/project/tests/integration/test_scd2_integration.py
 """
 

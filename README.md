@@ -2,6 +2,8 @@
 
 Hệ thống **Data Lakehouse** phục vụ phân tích khách hàng 360° cho ngân hàng bán lẻ. Được xây dựng trên Apache Iceberg + Spark + Trino + Airflow, chạy hoàn toàn trên Docker.
 
+Trạng thái hiện tại: toàn bộ 15 bước trong implementation plan đã hoàn thành. Hệ thống có bốn dimension SCD2 (`customer`, `account`, `product`, `branch`), mart current đúng một dòng/khách hàng, mart history theo ngày, daily master DAG, 15 Data Quality checks, rule-based Next Best Offer và Trino HTTPS/password/RBAC.
+
 ---
 
 ## Demo Story — Tại sao cần Lakehouse?
@@ -90,6 +92,7 @@ LIMIT 1000;
 cd retail-banking-customer360-lakehouse
 cp docker/.env.example docker/.env
 cp data_generator/config.example.yaml data_generator/config.yaml
+# Thay toàn bộ CHANGE_ME, đặc biệt bốn biến TRINO_*_PASSWORD/SECRET.
 
 # 2. Build custom images (~5 phút lần đầu)
 docker compose -f docker/docker-compose.yml build
@@ -108,8 +111,9 @@ cd data_generator && pip install -r requirements.txt && python run_sql_gen.py
 docker compose -f docker/docker-compose.yml exec airflow-scheduler \
     airflow dags trigger implement_iceberg_table_dag --conf '{"layer": "all"}'
 
-# 7. Chạy pipeline Bronze → Silver → Gold (qua Airflow UI hoặc CLI)
-# Thứ tự: bronze_initial → bronze_core_banking + bronze_card_crm → silver_all → gold_mart360 → gold_segmentation
+# 7. Sau bootstrap, chạy pipeline daily end-to-end cho một business date
+# DAG lakehouse_daily_pipeline_dag tự điều phối Bronze → Silver → Gold
+# → segmentation/NBO → time analytics → PII masking → Data Quality.
 ```
 
 ### Truy cập các service
@@ -119,7 +123,7 @@ docker compose -f docker/docker-compose.yml exec airflow-scheduler \
 | Airflow UI | http://localhost:8080 | Theo `docker/.env` |
 | Spark Master | http://localhost:9090 | — |
 | MinIO Console | http://localhost:9001 | Theo `docker/.env` |
-| Trino | localhost:8085 | Connect qua DBeaver |
+| Trino | https://localhost:8085 | User `marketing` hoặc `data_engineer`; password trong `docker/.env` |
 | JupyterLab | http://localhost:8888 | — (không cần password) |
 
 > **Jupyter**: Khởi động cùng stack và dùng thư mục `notebooks/` làm workspace bền vững. Do Spark cluster hiện có một worker nhỏ, không chạy notebook Spark đồng thời với Airflow Spark jobs.
@@ -148,7 +152,7 @@ retail-banking-customer360-lakehouse/
 │
 ├── code_etl/                   # Spark ETL jobs
 │   ├── bronze/                 # Generic JDBC ingest + 10 YAML configs
-│   ├── silver/                 # SCD1/SCD2/Fact jobs + 10 YAML configs
+│   ├── silver/                 # 4 SCD2 dimensions + daily/initial fact jobs
 │   ├── gold/                   # Gold mart jobs + 11 YAML configs
 │   └── shared/                 # SparkSession, utils, ops (PII masking, maintenance)
 │
@@ -157,13 +161,13 @@ retail-banking-customer360-lakehouse/
 │   │   ├── bronze/             # 3 DAGs (initial + core_banking + card_crm)
 │   │   ├── silver/             # 1 consolidated DAG (silver_all)
 │   │   ├── gold/               # 3 DAGs (mart360 + segmentation + time_analytics)
-│   │   ├── ops/                # 3 DAGs (implement_iceberg + pii_masking + maintenance)
+│   │   ├── ops/                # Iceberg, masking, maintenance và Data Quality DAGs
 │   │   └── util/               # 1 DAG (util_spark_sql — debug/ad-hoc)
 │   └── plugins/                # ETL flag, JDBC utils
 │
 ├── notebooks/                  # SCD2 và Customer 360 Spark SQL acceptance runbooks
 ├── tests/                      # Static contract + isolated Iceberg integration tests
-└── sql_templates/trino/        # 6 business queries + SCD2/Gold acceptance suites
+└── sql_templates/trino/        # Business queries + SCD2/Gold/DQ/NBO/security acceptance
 ```
 
 ---

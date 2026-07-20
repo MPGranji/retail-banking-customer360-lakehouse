@@ -126,6 +126,7 @@ class DataQualityContractTest(unittest.TestCase):
             "fact_surrogate_keys_not_orphan",
             "rfm_scores_in_valid_range",
             "campaign_unique_customer_date",
+            "nbo_contract_is_valid",
             "aum_reconciles_to_independent_sources",
             "masked_mart_has_no_raw_pii_columns",
         ):

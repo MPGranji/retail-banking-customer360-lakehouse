@@ -167,6 +167,25 @@ checks:
                    WHERE cob_dt = DATE '{{ cob_dt }}') AS BIGINT) AS total_count
       FROM duplicate_keys
 
+  - name: nbo_contract_is_valid
+    schema: gold
+    table: campaign_target
+    severity: critical
+    check_type: nbo_contract
+    sql: |
+      SELECT CAST(SUM(CASE
+                    WHEN cross_sell_score IS NULL OR cross_sell_score NOT BETWEEN 0 AND 100
+                      OR recommended_product IS NULL OR TRIM(recommended_product) = ''
+                      OR recommendation_reason IS NULL OR TRIM(recommendation_reason) = ''
+                      OR campaign_priority IS NULL OR campaign_priority NOT IN ('HIGH', 'MEDIUM', 'LOW')
+                      OR contact_eligible_flag IS NULL OR contact_eligible_flag NOT IN (0, 1)
+                      OR (contact_eligible_flag = 1 AND suppression_reason IS NOT NULL)
+                      OR (contact_eligible_flag = 0 AND suppression_reason IS NULL)
+                    THEN 1 ELSE 0 END) AS BIGINT) AS failed_count,
+             CAST(COUNT(*) AS BIGINT) AS total_count
+      FROM lakehouse.gold.campaign_target
+      WHERE cob_dt = DATE '{{ cob_dt }}'
+
   - name: segmentation_population_matches_current
     schema: gold
     table: rfm_segment,churn_prediction,cross_sell_segment,campaign_target

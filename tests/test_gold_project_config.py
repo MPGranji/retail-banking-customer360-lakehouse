@@ -130,6 +130,24 @@ class GoldProjectContractTest(unittest.TestCase):
             with self.subTest(template=path.name):
                 self.assertNotIn("DATE '2025-12-31'", path.read_text(encoding="utf-8"))
 
+    def test_campaign_target_exposes_explainable_nbo_contract(self):
+        config = _load(GOLD_DIR / "segmentation" / "campaign_target.yml")
+        sql = config["sql"]
+
+        for column in (
+            "cross_sell_score",
+            "recommended_product",
+            "recommendation_reason",
+            "campaign_priority",
+            "contact_eligible_flag",
+            "suppression_reason",
+        ):
+            self.assertIn(column, sql)
+        for score in ("THEN 30", "THEN 25", "THEN 20", "THEN 15", "THEN 10"):
+            self.assertIn(score, sql)
+        self.assertIn("GREATEST(0, LEAST(100", sql)
+        self.assertIn("silver.fact_crm_interaction", config["source"]["tables"])
+
 
 if __name__ == "__main__":
     unittest.main(verbosity=2)

@@ -54,6 +54,16 @@ Notebook kiểm tra:
 Kết quả thực thi được lưu trực tiếp trong notebook. Bộ query độc lập cho Trino
 là `sql_templates/trino/09_daily_pipeline_dq_acceptance.sql`.
 
+## Nghiệm thu Next Best Offer và Trino Security
+
+Sau khi migration NBO và `gold_segmentation_dag`/`ops_dq_daily_dag` thành công cho cùng ngày,
+chạy `05_nbo_security_acceptance.ipynb`. Notebook dùng Spark SQL để kiểm tra grain, score,
+reason, product, priority và suppression; sau đó gọi Trino HTTPS để xác nhận anonymous bị 401,
+Marketing chỉ đọc sandbox và Data Engineering đọc được raw layer. Password chỉ đọc từ environment,
+không được ghi vào cell hoặc output.
+
+Bộ query Trino tương ứng là `sql_templates/trino/10_nbo_security_acceptance.sql`.
+
 ## Controlled Oracle changes
 
 Từ PowerShell tại project root:

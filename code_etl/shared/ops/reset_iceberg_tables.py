@@ -785,6 +785,12 @@ TBLPROPERTIES (
     no_credit_card        INT,
     no_deposit            INT,
     no_loan               INT,
+    cross_sell_score      INT,
+    recommended_product   STRING,
+    recommendation_reason STRING,
+    campaign_priority     STRING,
+    contact_eligible_flag INT,
+    suppression_reason    STRING,
     campaign_type         STRING,
     cob_dt                DATE
 )
