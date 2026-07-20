@@ -15,6 +15,7 @@ Mở [http://localhost:8888](http://localhost:8888) và chọn kernel **PySpark 
 2. Trigger hai Bronze DAG với Param `cob_dt=2026-01-01` sau khi áp dụng controlled changes.
 3. Trigger `silver_all_dag` với cùng `cob_dt=2026-01-01`.
 4. `02_scd2_day2_acceptance.ipynb`
+   - Viết theo hướng SQL-first: logic nghiệm thu nằm trong Spark SQL; Python chỉ gọi query và dừng khi có `FAIL`.
    - Kiểm tra duplicate current row/SK, date range và overlap.
    - Kiểm tra version cũ/mới của bốn test keys.
    - Chứng minh thay đổi riêng `last_updated` không tạo version.

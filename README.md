@@ -161,7 +161,7 @@ retail-banking-customer360-lakehouse/
 │   │   └── util/               # 1 DAG (util_spark_sql — debug/ad-hoc)
 │   └── plugins/                # ETL flag, JDBC utils
 │
-├── notebooks/                  # PySpark baseline và acceptance runbooks
+├── notebooks/                  # Spark/Iceberg baseline và Spark SQL acceptance runbooks
 ├── tests/                      # Static contract + isolated Iceberg integration tests
 └── sql_templates/trino/        # 6 business queries + SCD2 acceptance suite
 ```
