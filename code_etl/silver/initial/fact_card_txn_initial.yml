@@ -15,10 +15,16 @@ business_key:
   - txn_id
 
 load:
-  mode: daily
+  mode: initial
   partition_column: cob_dt
+  bootstrap_dimension_rule: earliest_known_version_before_first_effective_date
 
 sql: |
+  WITH customer_versions AS (
+      SELECT c.*,
+             MIN(effective_from) OVER (PARTITION BY customer_id) AS first_effective_from
+      FROM lakehouse.silver.dim_customer c
+  )
   SELECT
       t.txn_id,
       t.card_id,
@@ -35,7 +41,12 @@ sql: |
       t.created_ts,
       t.cob_dt
   FROM lakehouse.bronze.card_txn t
-  LEFT JOIN lakehouse.silver.dim_customer c
+  LEFT JOIN customer_versions c
       ON t.customer_id = c.customer_id
-      AND CAST(t.txn_date AS DATE) BETWEEN c.effective_from AND c.effective_to
-  WHERE t.cob_dt = DATE '{{ cob_dt }}'
+      AND (
+          CAST(t.txn_date AS DATE) BETWEEN c.effective_from AND c.effective_to
+          OR (
+              CAST(t.txn_date AS DATE) < c.first_effective_from
+              AND c.effective_from = c.first_effective_from
+          )
+      )
