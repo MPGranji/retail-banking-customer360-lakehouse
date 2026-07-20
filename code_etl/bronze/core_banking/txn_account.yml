@@ -1,0 +1,33 @@
+source:
+  type: oracle
+  fetchsize: 10000
+  # jdbc_partition KHÔNG dùng cho incremental: Spark sẽ wrap subquery đã có
+  # WHERE last_updated = 1 ngày thêm AND txn_id BETWEEN x AND y,
+  # buộc Oracle scan 8 lần thay vì 1. fetchsize đủ để tăng tốc.
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: core_txn_account
+
+load:
+  strategy: incremental
+
+sql: |
+  SELECT
+      txn_id,
+      account_id,
+      customer_id,
+      txn_date,
+      txn_amount,
+      txn_type,
+      debit_credit,
+      balance_after,
+      channel,
+      description,
+      counter_account,
+      created_ts,
+      last_updated
+  FROM core_banking.txn_account
+  WHERE txn_date >= TO_DATE('{{ cob_dt }}', 'YYYY-MM-DD')
+    AND txn_date <  TO_DATE('{{ cob_dt }}', 'YYYY-MM-DD') + 1

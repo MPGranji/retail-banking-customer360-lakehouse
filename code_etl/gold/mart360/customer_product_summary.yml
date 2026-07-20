@@ -1,0 +1,68 @@
+job:
+  type: mart360
+
+source:
+  tables:
+    - silver.dim_customer
+    - silver.dim_account
+    - silver.dim_card
+    - silver.dim_deposit
+    - silver.dim_loan
+
+target:
+  catalog: lakehouse
+  schema: gold
+  table: customer_product_summary
+
+upstream_flags:
+  - silver.dim_customer
+  - silver.dim_account
+  - silver.dim_card
+  - silver.dim_deposit
+  - silver.dim_loan
+
+sql: |
+  SELECT
+      c.customer_id,
+      c.customer_sk,
+      -- Tài khoản (account_type = 'CASA' hoặc 'TIME_DEPOSIT')
+      COUNT(DISTINCT a.account_id)                                                              AS total_accounts,
+      COUNT(DISTINCT CASE WHEN a.account_type = 'CASA'
+                          AND a.status = 'ACTIVE'        THEN a.account_id END)                AS cnt_casa_active,
+      COUNT(DISTINCT CASE WHEN a.account_type = 'TIME_DEPOSIT'
+                          AND a.status = 'ACTIVE'        THEN a.account_id END)                AS cnt_td_active,
+      -- Tiết kiệm
+      COUNT(DISTINCT d.deposit_id)                                                              AS cnt_deposits,
+      COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'       THEN d.deposit_id END)               AS cnt_deposits_active,
+      -- Khoản vay
+      COUNT(DISTINCT l.loan_id)                                                                 AS cnt_loans,
+      COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'  THEN l.loan_id END)                  AS cnt_loans_active,
+      -- Thẻ (join bởi customer_id, không qua account)
+      COUNT(DISTINCT cd.card_id)                                                                AS cnt_cards,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                          AND cd.status = 'ACTIVE'       THEN cd.card_id END)                  AS cnt_credit_cards,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'DEBIT'
+                          AND cd.status = 'ACTIVE'       THEN cd.card_id END)                  AS cnt_debit_cards,
+      -- Flags tổng hợp
+      CASE WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                                    AND cd.status = 'ACTIVE' THEN cd.card_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_credit_card,
+      CASE WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE' THEN d.deposit_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_savings,
+      CASE WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE' THEN l.loan_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_loan,
+      DATE '{{ cob_dt }}'                                                                             AS cob_dt
+  FROM lakehouse.silver.dim_customer c
+  LEFT JOIN lakehouse.silver.dim_account a
+      ON c.customer_id = a.customer_id
+      AND a.is_current = 1
+  LEFT JOIN lakehouse.silver.dim_deposit d
+      ON c.customer_id = d.customer_id
+  LEFT JOIN lakehouse.silver.dim_loan l
+      ON c.customer_id = l.customer_id
+  LEFT JOIN lakehouse.silver.dim_card cd
+      ON c.customer_id = cd.customer_id
+  WHERE c.is_current = 1
+  GROUP BY
+      c.customer_id,
+      c.customer_sk

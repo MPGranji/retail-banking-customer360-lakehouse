@@ -1,0 +1,28 @@
+source:
+  type: postgres
+  fetchsize: 5000
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: crm_interaction
+
+load:
+  strategy: incremental
+
+sql: |
+  SELECT
+      interaction_id,
+      customer_id,
+      interaction_date,
+      channel,
+      direction,
+      subject,
+      category,
+      status,
+      assigned_to,
+      created_ts,
+      last_updated
+  FROM card_crm.crm_interaction
+  WHERE interaction_date >= '{{ cob_dt }}'::date
+    AND interaction_date <  ('{{ cob_dt }}'::date + 1)

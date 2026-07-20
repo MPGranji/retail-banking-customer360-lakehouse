@@ -1,0 +1,30 @@
+source:
+  type: postgres
+  fetchsize: 5000
+  # Initial full load: đọc toàn bộ bảng, KHÔNG filter theo last_updated.
+  # Bảng 50k rows — 1 partition đủ, không cần jdbc_partition.
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: crm_interaction
+
+load:
+  strategy: initial_full
+  # cob_dt_from_column: mỗi row tự suy cob_dt từ interaction_date → đúng partition ngày.
+  cob_dt_from_column: interaction_date
+
+sql: |
+  SELECT
+      interaction_id,
+      customer_id,
+      interaction_date,
+      channel,
+      direction,
+      subject,
+      category,
+      status,
+      assigned_to,
+      created_ts,
+      last_updated
+  FROM card_crm.crm_interaction

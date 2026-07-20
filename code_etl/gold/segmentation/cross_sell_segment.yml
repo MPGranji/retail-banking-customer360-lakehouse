@@ -1,0 +1,62 @@
+job:
+  type: segment
+
+source:
+  tables:
+    - silver.dim_customer
+    - silver.dim_card
+    - silver.dim_deposit
+    - silver.dim_loan
+
+target:
+  catalog: lakehouse
+  schema: gold
+  table: cross_sell_segment
+
+upstream_flags:
+  - silver.dim_customer
+  - silver.dim_card
+  - silver.dim_deposit
+  - silver.dim_loan
+
+sql: |
+  SELECT
+      c.customer_id,
+      c.customer_sk,
+      c.customer_segment,
+      -- Flags sản phẩm chưa có (dùng status = 'ACTIVE', không phải card_status)
+      CASE WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                                    AND cd.status = 'ACTIVE' THEN cd.card_id END) = 0
+           THEN 1 ELSE 0 END         AS no_credit_card,
+      CASE WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'
+                                    THEN d.deposit_id END) = 0
+           THEN 1 ELSE 0 END         AS no_deposit,
+      CASE WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'
+                                    THEN l.loan_id END) = 0
+           THEN 1 ELSE 0 END         AS no_loan,
+      -- Cơ hội cross-sell ưu tiên nhất
+      CASE
+          WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                                   AND cd.status = 'ACTIVE' THEN cd.card_id END) = 0
+               THEN 'Credit Card'
+          WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'
+                                   THEN d.deposit_id END) = 0
+               THEN 'Deposit'
+          WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'
+                                   THEN l.loan_id END) = 0
+               THEN 'Loan'
+          ELSE 'None'
+      END                            AS primary_opportunity,
+      DATE '{{ cob_dt }}'                   AS cob_dt
+  FROM lakehouse.silver.dim_customer c
+  LEFT JOIN lakehouse.silver.dim_card cd
+      ON c.customer_id = cd.customer_id
+  LEFT JOIN lakehouse.silver.dim_deposit d
+      ON c.customer_id = d.customer_id
+  LEFT JOIN lakehouse.silver.dim_loan l
+      ON c.customer_id = l.customer_id
+  WHERE c.is_current = 1
+  GROUP BY
+      c.customer_id,
+      c.customer_sk,
+      c.customer_segment

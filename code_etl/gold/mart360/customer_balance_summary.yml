@@ -1,0 +1,55 @@
+job:
+  type: mart360
+
+source:
+  tables:
+    - silver.dim_customer
+    - silver.dim_account
+    - silver.dim_deposit
+    - silver.dim_loan
+
+target:
+  catalog: lakehouse
+  schema: gold
+  table: customer_balance_summary
+
+upstream_flags:
+  - silver.dim_customer
+  - silver.dim_account
+  - silver.dim_deposit
+  - silver.dim_loan
+
+sql: |
+  SELECT
+      c.customer_id,
+      c.customer_sk,
+      -- balance tài khoản ACTIVE
+      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)           AS total_account_balance,
+      COALESCE(AVG(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)           AS avg_account_balance,
+      -- principal tiết kiệm ACTIVE (dùng principal_amount, không phải deposit_amount)
+      COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)  AS total_deposit_principal,
+      -- dư nợ vay còn lại
+      COALESCE(SUM(CASE WHEN l.loan_status = 'ACTIVE'
+                        THEN l.outstanding_balance END), 0)                        AS total_loan_outstanding,
+      -- AUM = account balance + deposit principal
+      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)
+          + COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)
+                                                                                   AS aum_total,
+      -- Net worth = AUM - outstanding loan
+      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)
+          + COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)
+          - COALESCE(SUM(CASE WHEN l.loan_status = 'ACTIVE'
+                              THEN l.outstanding_balance END), 0)                  AS net_worth,
+      DATE '{{ cob_dt }}'                                                                 AS cob_dt
+  FROM lakehouse.silver.dim_customer c
+  LEFT JOIN lakehouse.silver.dim_account a
+      ON c.customer_id = a.customer_id
+      AND a.is_current = 1
+  LEFT JOIN lakehouse.silver.dim_deposit d
+      ON c.customer_id = d.customer_id
+  LEFT JOIN lakehouse.silver.dim_loan l
+      ON c.customer_id = l.customer_id
+  WHERE c.is_current = 1
+  GROUP BY
+      c.customer_id,
+      c.customer_sk

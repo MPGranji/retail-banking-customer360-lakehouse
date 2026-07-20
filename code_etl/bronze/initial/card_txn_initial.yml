@@ -1,0 +1,37 @@
+source:
+  type: postgres
+  fetchsize: 5000
+  # Initial full load: đọc toàn bộ bảng, KHÔNG filter theo last_updated.
+  # Bảng 500k rows — chia 4 partitions theo txn_id để đọc song song.
+  jdbc_partition:
+    partition_column: txn_id
+    lower_bound: 1
+    upper_bound: 5000000
+    num_partitions: 4
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: card_txn
+
+load:
+  strategy: initial_full
+  # cob_dt_from_column: mỗi row tự suy cob_dt từ txn_date → đúng partition ngày.
+  cob_dt_from_column: txn_date
+
+sql: |
+  SELECT
+      txn_id,
+      card_id,
+      customer_id,
+      txn_date,
+      txn_amount,
+      txn_type,
+      currency,
+      merchant_name,
+      merchant_category,
+      channel,
+      status,
+      created_ts,
+      last_updated
+  FROM card_crm.card_txn

@@ -1,0 +1,22 @@
+# Bronze Incremental Template
+# Use for transaction/event tables with change data capture
+# cob_dt is understood as the previous day, can be adjusted by Airflow logic
+
+source:
+  type: postgres  # or oracle
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: card_txn
+
+load:
+  strategy: incremental
+
+sql: |
+  SELECT
+      a.*,
+      DATE '{{ cob_dt }}' AS cob_dt
+  FROM card.transaction a
+  WHERE a.updated_at >= DATE '{{ cob_dt }}'
+    AND a.updated_at < DATE '{{ cob_dt }}' + 1

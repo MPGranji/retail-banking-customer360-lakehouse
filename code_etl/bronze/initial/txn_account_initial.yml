@@ -1,0 +1,31 @@
+source:
+  type: oracle
+  fetchsize: 10000
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: core_txn_account
+
+load:
+  strategy: initial_full
+  # cob_dt_from_column: mỗi row tự suy cob_dt từ txn_date thay vì dùng giá trị tĩnh.
+  # Kết quả: 365 ngày dữ liệu lịch sử sẽ được phân vào 365 partition riêng biệt.
+  cob_dt_from_column: txn_date
+
+sql: |
+  SELECT
+      txn_id,
+      account_id,
+      customer_id,
+      txn_date,
+      txn_amount,
+      txn_type,
+      debit_credit,
+      balance_after,
+      channel,
+      description,
+      counter_account,
+      created_ts,
+      last_updated
+  FROM core_banking.txn_account

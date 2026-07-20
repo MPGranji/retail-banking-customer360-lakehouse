@@ -1,0 +1,68 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+*.egg
+*.egg-info/
+dist/
+build/
+.eggs/
+.Python
+env/
+venv/
+.venv/
+.env
+.claude
+
+# Project documentation (kept local only)
+docs/
+
+# Jupyter
+.ipynb_checkpoints/
+*.ipynb
+
+# IDEs
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+*.log
+logs/
+
+# Spark
+spark-warehouse/
+derby.log
+metastore_db/
+
+# Docker volumes & secrets
+docker/.env
+docker/volumes/
+
+# Secrets & credentials
+*.pem
+*.key
+*.p12
+secrets/
+.credentials
+
+# Data files (không commit data thật)
+data/
+data_generator/config.yaml
+*.csv
+*.parquet
+*.avro
+*.orc
+
+# Coverage / test output
+.coverage
+htmlcov/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# OS
+Thumbs.db

@@ -1,0 +1,37 @@
+job:
+  type: fact_txn
+
+source:
+  tables:
+    - bronze.card_txn
+    - silver.dim_card
+    - silver.dim_customer
+
+target:
+  catalog: lakehouse
+  schema: silver
+  table: fact_card_txn
+
+business_key:
+  - txn_id
+
+sql: |
+  SELECT
+      t.txn_id,
+      t.card_id,
+      t.customer_id,
+      c.customer_sk,
+      t.txn_date,
+      t.txn_amount,
+      t.txn_type,
+      t.currency,
+      t.merchant_name,
+      t.merchant_category,
+      t.channel,
+      t.status,
+      t.created_ts,
+      t.cob_dt
+  FROM lakehouse.bronze.card_txn t
+  LEFT JOIN lakehouse.silver.dim_customer c
+      ON t.customer_id = c.customer_id
+      AND c.is_current = 1

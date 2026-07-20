@@ -1,0 +1,30 @@
+source:
+  type: postgres
+  fetchsize: 5000
+
+target:
+  catalog: lakehouse
+  schema: bronze
+  table: card_txn
+
+load:
+  strategy: incremental
+
+sql: |
+  SELECT
+      txn_id,
+      card_id,
+      customer_id,
+      txn_date,
+      txn_amount,
+      txn_type,
+      currency,
+      merchant_name,
+      merchant_category,
+      channel,
+      status,
+      created_ts,
+      last_updated
+  FROM card_crm.card_txn
+  WHERE txn_date >= '{{ cob_dt }}'::date
+    AND txn_date <  ('{{ cob_dt }}'::date + 1)

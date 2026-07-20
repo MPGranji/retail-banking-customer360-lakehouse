@@ -1,0 +1,41 @@
+seed: 42
+
+# Must match the processing date used by the demo DAGs.
+cob_dt: "2025-12-31"
+
+customers:
+  total: 10000
+  segment_distribution:
+    RETAIL: 0.70
+    PRIORITY: 0.25
+    VIP: 0.05
+  credit_card_ratio:
+    VIP: 0.70
+    PRIORITY: 0.50
+    RETAIL: 0.15
+
+transactions:
+  months_history: 12
+  txn_account_per_month:
+    VIP: 30
+    PRIORITY: 15
+    RETAIL: 5
+  card_txn_per_month:
+    VIP: 10
+    PRIORITY: 8
+    RETAIL: 4
+  crm_total: 10000
+
+oracle:
+  host: "localhost"
+  port: 1521
+  service: "XEPDB1"
+  user: "core_banking"
+  password: "CHANGE_ME"
+
+postgres:
+  host: "localhost"
+  port: 5432
+  dbname: "card_crm"
+  user: "card_crm"
+  password: "CHANGE_ME"
