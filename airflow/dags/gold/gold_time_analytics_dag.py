@@ -15,6 +15,7 @@ from datetime import timedelta
 
 import pendulum
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
@@ -23,7 +24,8 @@ from etl_flag import make_start_flag_task, make_end_flag_task
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID           = "gold_time_analytics_dag"
-DATA_COB_DT      = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
+DEFAULT_COB_DT   = "2025-12-31"
+DATA_COB_DT      = "{{ params.cob_dt }}"
 POSTGRES_CONN_ID = "postgres-etl"
 SPARK_CONN_ID    = "spark_default"
 GOLD_BASE        = "/opt/project/code_etl/gold"
@@ -67,6 +69,9 @@ dag = DAG(
     schedule_interval=None,   # trigger thủ công
     catchup=False,
     max_active_tasks=1,
+    params={
+        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
+    },
     tags=["gold", "time_analytics", "manual"],
 )
 

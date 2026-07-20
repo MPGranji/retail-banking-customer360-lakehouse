@@ -32,6 +32,5 @@ JOIN lakehouse.gold.churn_prediction ch
 WHERE m.churn_flag = 1                                        -- không giao dịch > 90 ngày
   AND m.aum_total >= 50000000                                 -- AUM > 50 triệu (đáng giữ lại)
   AND m.customer_segment IN ('PRIORITY', 'VIP')
-  AND m.cob_dt = DATE '2025-12-31'
 ORDER BY m.aum_total DESC, ch.days_since_last_txn DESC
 LIMIT 500;

@@ -13,6 +13,9 @@ target:
   schema: gold
   table: customer_balance_summary
 
+write:
+  strategy: overwrite_partitions
+
 upstream_flags:
   - silver.dim_customer
   - silver.dim_account
@@ -20,36 +23,58 @@ upstream_flags:
   - silver.dim_loan
 
 sql: |
+  WITH customers AS (
+      SELECT customer_id, customer_sk
+      FROM lakehouse.silver.dim_customer
+      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
+  ),
+  account_agg AS (
+      SELECT
+          customer_id,
+          SUM(CASE WHEN status = 'ACTIVE' THEN balance ELSE 0 END) AS total_account_balance,
+          AVG(CASE WHEN status = 'ACTIVE' THEN balance END)        AS avg_account_balance
+      FROM lakehouse.silver.dim_account
+      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
+      GROUP BY customer_id
+  ),
+  deposit_agg AS (
+      SELECT
+          customer_id,
+          SUM(CASE WHEN status = 'ACTIVE' THEN principal_amount ELSE 0 END)
+              AS total_deposit_principal
+      FROM lakehouse.silver.dim_deposit
+      GROUP BY customer_id
+  ),
+  loan_agg AS (
+      SELECT
+          customer_id,
+          SUM(CASE WHEN loan_status = 'ACTIVE' THEN outstanding_balance ELSE 0 END)
+              AS total_loan_outstanding
+      FROM lakehouse.silver.dim_loan
+      GROUP BY customer_id
+  ),
+  combined AS (
+      SELECT
+          c.customer_id,
+          c.customer_sk,
+          COALESCE(a.total_account_balance, 0)    AS total_account_balance,
+          COALESCE(a.avg_account_balance, 0)      AS avg_account_balance,
+          COALESCE(d.total_deposit_principal, 0) AS total_deposit_principal,
+          COALESCE(l.total_loan_outstanding, 0)  AS total_loan_outstanding
+      FROM customers c
+      LEFT JOIN account_agg a ON c.customer_id = a.customer_id
+      LEFT JOIN deposit_agg d ON c.customer_id = d.customer_id
+      LEFT JOIN loan_agg l ON c.customer_id = l.customer_id
+  )
   SELECT
-      c.customer_id,
-      c.customer_sk,
-      -- balance tài khoản ACTIVE
-      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)           AS total_account_balance,
-      COALESCE(AVG(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)           AS avg_account_balance,
-      -- principal tiết kiệm ACTIVE (dùng principal_amount, không phải deposit_amount)
-      COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)  AS total_deposit_principal,
-      -- dư nợ vay còn lại
-      COALESCE(SUM(CASE WHEN l.loan_status = 'ACTIVE'
-                        THEN l.outstanding_balance END), 0)                        AS total_loan_outstanding,
-      -- AUM = account balance + deposit principal
-      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)
-          + COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)
-                                                                                   AS aum_total,
-      -- Net worth = AUM - outstanding loan
-      COALESCE(SUM(CASE WHEN a.status = 'ACTIVE' THEN a.balance END), 0)
-          + COALESCE(SUM(CASE WHEN d.status = 'ACTIVE' THEN d.principal_amount END), 0)
-          - COALESCE(SUM(CASE WHEN l.loan_status = 'ACTIVE'
-                              THEN l.outstanding_balance END), 0)                  AS net_worth,
-      DATE '{{ cob_dt }}'                                                                 AS cob_dt
-  FROM lakehouse.silver.dim_customer c
-  LEFT JOIN lakehouse.silver.dim_account a
-      ON c.customer_id = a.customer_id
-      AND a.is_current = 1
-  LEFT JOIN lakehouse.silver.dim_deposit d
-      ON c.customer_id = d.customer_id
-  LEFT JOIN lakehouse.silver.dim_loan l
-      ON c.customer_id = l.customer_id
-  WHERE c.is_current = 1
-  GROUP BY
-      c.customer_id,
-      c.customer_sk
+      customer_id,
+      customer_sk,
+      CAST(ROUND(total_account_balance, 2) AS DECIMAL(18,2)) AS total_account_balance,
+      CAST(ROUND(avg_account_balance, 2) AS DECIMAL(18,2)) AS avg_account_balance,
+      CAST(ROUND(total_deposit_principal, 2) AS DECIMAL(18,2)) AS total_deposit_principal,
+      CAST(ROUND(total_loan_outstanding, 2) AS DECIMAL(18,2)) AS total_loan_outstanding,
+      CAST(ROUND(total_account_balance + total_deposit_principal, 2) AS DECIMAL(18,2)) AS aum_total,
+      CAST(ROUND(total_account_balance + total_deposit_principal - total_loan_outstanding, 2)
+           AS DECIMAL(18,2)) AS net_worth,
+      DATE '{{ cob_dt }}' AS cob_dt
+  FROM combined

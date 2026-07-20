@@ -8,6 +8,7 @@ from datetime import timedelta
 
 from airflow import DAG
 from airflow.models import Variable
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 import pendulum
@@ -17,7 +18,8 @@ from etl_flag import make_start_flag_task, make_end_flag_task
 DAG_ID               = "ops_pii_masking_daily_dag"
 APPLICATION_PATH           = "/opt/project/code_etl/shared/ops/pii_masking.py"
 POSTGRES_ETL_CONN_ID = "postgres-etl"
-COB_DT               = "2025-12-31"
+DEFAULT_COB_DT       = "2025-12-31"
+COB_DT               = "{{ params.cob_dt }}"
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -42,6 +44,9 @@ dag = DAG(
     schedule_interval=None,   # sau khi gold hoan tat
     catchup=False,
     max_active_tasks=1,
+    params={
+        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
+    },
     tags=["ops", "pii", "masking", "compliance"],
 )
 

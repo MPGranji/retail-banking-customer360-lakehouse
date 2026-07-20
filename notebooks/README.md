@@ -21,6 +21,24 @@ Mở [http://localhost:8888](http://localhost:8888) và chọn kernel **PySpark 
    - Chứng minh thay đổi riêng `last_updated` không tạo version.
    - Chụp fingerprint trước và sau rerun để chứng minh idempotency.
 
+## Nghiệm thu Customer 360 Gold
+
+Sau khi chạy Gold cho hai ngày theo thứ tự `gold_mart360_dag` →
+`gold_segmentation_dag` → `gold_time_analytics_dag` →
+`ops_pii_masking_daily_dag`, mở `03_customer360_gold_acceptance.ipynb`.
+
+Notebook dùng Spark SQL để kiểm tra:
+
+- current mart chỉ có snapshot mới nhất và duy nhất theo `customer_id`;
+- history giữ đủ hai ngày và duy nhất theo `(customer_id, cob_dt)`;
+- AUM/card KPI khớp aggregate độc lập từ Silver facts;
+- RFM, churn, cross-sell và campaign có population hợp lệ;
+- masked mart không lộ các cột PII gốc;
+- lịch sử Customer 360 của test customer phản ánh thay đổi SCD2.
+
+Kết quả thực thi được lưu trực tiếp trong notebook. File SQL tương đương cho
+Trino là `sql_templates/trino/08_gold_customer360_acceptance_checks.sql`.
+
 ## Controlled Oracle changes
 
 Từ PowerShell tại project root:
