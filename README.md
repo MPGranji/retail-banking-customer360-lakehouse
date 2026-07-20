@@ -163,7 +163,7 @@ retail-banking-customer360-lakehouse/
 │
 ├── notebooks/                  # PySpark baseline và acceptance runbooks
 ├── tests/                      # Static contract + isolated Iceberg integration tests
-└── sql_templates/trino/        # 6 business queries
+└── sql_templates/trino/        # 6 business queries + SCD2 acceptance suite
 ```
 
 ---

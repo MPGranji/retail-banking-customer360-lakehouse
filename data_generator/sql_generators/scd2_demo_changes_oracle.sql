@@ -81,7 +81,7 @@ WHERE product_code = 'CASA002';
 UPDATE core_banking.branch
 SET manager_name = 'SCD2 Demo Manager',
     address = 'SCD2 Demo Branch Address',
-    status = 'INACTIVE',
+    status = 'CLOSED',
     last_updated = TIMESTAMP '2026-01-01 08:00:00'
 WHERE branch_code = 'BDG001';
 
