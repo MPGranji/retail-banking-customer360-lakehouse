@@ -297,6 +297,73 @@ checks:
     check_type: schema_columns_absent
     forbidden_columns: [full_name, phone, email, cccd, address]
 
+  - name: dashboard_customer_date_is_unique
+    schema: sandbox
+    table: mart_customer_360_dashboard
+    severity: critical
+    check_type: uniqueness
+    sql: |
+      WITH duplicates AS (
+          SELECT customer_id, cob_dt
+          FROM lakehouse.sandbox.mart_customer_360_dashboard
+          WHERE cob_dt = DATE '{{ cob_dt }}'
+          GROUP BY customer_id, cob_dt
+          HAVING COUNT(*) > 1
+      )
+      SELECT CAST(COUNT(*) AS BIGINT) AS failed_count,
+             CAST((SELECT COUNT(*) FROM lakehouse.sandbox.mart_customer_360_dashboard
+                   WHERE cob_dt = DATE '{{ cob_dt }}') AS BIGINT) AS total_count
+      FROM duplicates
+
+  - name: dashboard_population_matches_gold_history
+    schema: sandbox
+    table: mart_customer_360_dashboard
+    severity: critical
+    check_type: population
+    sql: |
+      WITH gold AS (
+          SELECT customer_id
+          FROM lakehouse.gold.mart_customer_360_history
+          WHERE cob_dt = DATE '{{ cob_dt }}'
+      ), dashboard AS (
+          SELECT customer_id
+          FROM lakehouse.sandbox.mart_customer_360_dashboard
+          WHERE cob_dt = DATE '{{ cob_dt }}'
+      ), mismatch AS (
+          SELECT COALESCE(g.customer_id, d.customer_id) AS customer_id
+          FROM gold g FULL OUTER JOIN dashboard d ON g.customer_id = d.customer_id
+          WHERE g.customer_id IS NULL OR d.customer_id IS NULL
+      )
+      SELECT CAST(COUNT(*) AS BIGINT) AS failed_count,
+             CAST((SELECT COUNT(*) FROM gold) AS BIGINT) AS total_count
+      FROM mismatch
+
+  - name: dashboard_nbo_contract_is_valid
+    schema: sandbox
+    table: mart_customer_360_dashboard
+    severity: critical
+    check_type: dashboard_contract
+    sql: |
+      SELECT CAST(SUM(CASE
+                 WHEN cross_sell_score IS NULL OR cross_sell_score NOT BETWEEN 0 AND 100
+                   OR recommended_product IS NULL OR TRIM(recommended_product) = ''
+                   OR recommendation_reason IS NULL OR TRIM(recommendation_reason) = ''
+                   OR campaign_priority IS NULL OR campaign_priority NOT IN ('HIGH', 'MEDIUM', 'LOW')
+                   OR contact_eligible_flag IS NULL OR contact_eligible_flag NOT IN (0, 1)
+                   OR (contact_eligible_flag = 1 AND suppression_reason IS NOT NULL)
+                   OR (contact_eligible_flag = 0 AND suppression_reason IS NULL)
+                 THEN 1 ELSE 0 END) AS BIGINT) AS failed_count,
+             CAST(COUNT(*) AS BIGINT) AS total_count
+      FROM lakehouse.sandbox.mart_customer_360_dashboard
+      WHERE cob_dt = DATE '{{ cob_dt }}'
+
+  - name: dashboard_has_no_raw_pii_columns
+    schema: sandbox
+    table: mart_customer_360_dashboard
+    severity: critical
+    check_type: schema_columns_absent
+    forbidden_columns: [full_name, phone, email, cccd, address]
+
   - name: all_rfm_segments_reachable
     schema: gold
     table: rfm_segment
