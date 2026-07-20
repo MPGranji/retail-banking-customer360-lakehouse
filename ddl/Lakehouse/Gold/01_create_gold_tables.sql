@@ -274,6 +274,12 @@ CREATE TABLE lakehouse.gold.campaign_target (
     no_credit_card        INT,
     no_deposit            INT,
     no_loan               INT,
+    cross_sell_score      INT,        -- 0..100
+    recommended_product   STRING,
+    recommendation_reason STRING,
+    campaign_priority     STRING,     -- HIGH / MEDIUM / LOW
+    contact_eligible_flag INT,        -- 0/1, suppression applied after scoring
+    suppression_reason    STRING,
     campaign_type         STRING,     -- Retention / Cross_Sell_CC / Cross_Sell / Upsell / Awareness
     cob_dt                DATE
 )

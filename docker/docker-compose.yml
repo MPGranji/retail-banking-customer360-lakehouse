@@ -427,8 +427,8 @@ services:
   # ---------------------------------------------------------------------------
   # Trino — federated query engine (ad-hoc analytics / BI)
   # Port:    8085 → 8080
-  # Client:  DBeaver — jdbc:trino://localhost:8085/iceberg
-  # UI:      http://localhost:8085
+  # Client:  DBeaver — jdbc:trino://localhost:8085/lakehouse?SSL=true
+  # UI:      https://localhost:8085 (self-signed certificate in local demo)
   # ---------------------------------------------------------------------------
   trino:
     image: trinodb/trino:481
@@ -438,11 +438,18 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TRINO_KEYSTORE_PASSWORD: ${TRINO_KEYSTORE_PASSWORD}
+      TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
+      TRINO_MARKETING_PASSWORD: ${TRINO_MARKETING_PASSWORD}
+      TRINO_ENGINEERING_PASSWORD: ${TRINO_ENGINEERING_PASSWORD}
     ports:
-      - "8085:8080"
+      - "8085:8443"
     volumes:
-      - ./trino/etc:/etc/trino
-      - ./trino/catalog:/etc/trino/catalog
+      - ./trino/etc:/etc/trino:ro
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/security:/opt/trino-security:ro
+      - ./volumes/trino-security:/var/trino/security
+    entrypoint: ["/bin/sh", "/opt/trino-security/start-secure-trino.sh"]
     # heap 768m + code-cache 128m + metaspace/threads ~304m ≈ 1.2g
     mem_limit: 1200m
     depends_on:
@@ -450,7 +457,7 @@ services:
         condition: service_healthy
     healthcheck:
       # /v1/info nhanh hơn chạy trino CLI — không cần client session
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -ksf https://localhost:8443/v1/info > /dev/null || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5

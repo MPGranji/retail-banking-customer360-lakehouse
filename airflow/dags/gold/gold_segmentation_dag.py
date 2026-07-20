@@ -6,7 +6,7 @@ Luồng thực thi:
   2. Kiểm tra silver_all_dag đã hoàn thành
   3. Chạy song song 3 seg jobs (rfm, churn, cross_sell)
   4. Kiểm tra gold_mart360_dag đã hoàn thành (campaign_target cần mart_customer_360_history)
-  5. Chạy campaign_target
+  5. Chạy campaign_target và rule-based Next Best Offer
   6. dag_end ghi cờ S
 
 DATA_COB_DT nhận từ manual Param ``cob_dt``.
@@ -71,7 +71,7 @@ def _check_dag_flag_sql(upstream_dag_id: str) -> str:
 dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="Gold segmentation — rfm, churn, cross_sell → campaign_target (manual build)",
+    description="Gold segmentation — RFM, churn, cross-sell và explainable NBO campaign target",
     schedule_interval=None,   # trigger thủ công, sau khi gold_mart360_dag xong
     catchup=False,
     max_active_tasks=1,
