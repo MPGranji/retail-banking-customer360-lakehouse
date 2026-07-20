@@ -10,21 +10,25 @@ from datetime import timedelta
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.utils.task_group import TaskGroup
 import pendulum
 
 from jdbc_conn_utils import jdbc_jinja_args
-from etl_flag import make_start_flag_task, make_end_flag_task
+from etl_flag import (
+    PROCESSING_DATE_TEMPLATE,
+    make_end_flag_task,
+    make_failure_callback,
+    make_start_flag_task,
+    processing_run_params,
+)
 
 DAG_ID             = "bronze_core_banking_dag"
 ETL_PATH           = Variable.get("ETL_PATH", default_var="/opt/project/code_etl")
 SPARK_APPLICATION  = f"{ETL_PATH}/bronze/base_job/ingestion_jdbc.py"
 CONFIG_DIR         = Path(ETL_PATH) / "bronze" / "core_banking"
 CONN_ID            = "oracle-core"
-DEFAULT_COB_DT     = "2025-12-31"
-COB_DT             = "{{ params.cob_dt }}"
+COB_DT             = PROCESSING_DATE_TEMPLATE
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -47,9 +51,8 @@ dag = DAG(
     schedule_interval=None,
     catchup=False,
     max_active_tasks=1,
-    params={
-        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
-    },
+    params=processing_run_params(),
+    on_failure_callback=make_failure_callback(DAG_ID, "bronze"),
     tags=["bronze", "core_banking", "oracle"],
 )
 

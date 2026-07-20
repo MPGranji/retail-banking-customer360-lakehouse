@@ -121,7 +121,8 @@ class GoldProjectContractTest(unittest.TestCase):
         dag_text = (PROJECT_ROOT / "airflow" / "dags" / "gold" / "gold_mart360_dag.py").read_text(
             encoding="utf-8"
         )
-        self.assertIn('{{ params.cob_dt }}', dag_text)
+        self.assertIn("PROCESSING_DATE_TEMPLATE", dag_text)
+        self.assertIn("processing_run_params()", dag_text)
         self.assertIn("run_history >> run_current", dag_text)
         self.assertIn('customer_360_history.yml', dag_text)
 

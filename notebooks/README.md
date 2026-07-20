@@ -39,6 +39,21 @@ Notebook dùng Spark SQL để kiểm tra:
 Kết quả thực thi được lưu trực tiếp trong notebook. File SQL tương đương cho
 Trino là `sql_templates/trino/08_gold_customer360_acceptance_checks.sql`.
 
+## Nghiệm thu daily pipeline và Data Quality
+
+Sau khi trigger `lakehouse_daily_pipeline_dag` với cùng `cob_dt` và
+`pipeline_run_id` cho toàn pipeline, mở `04_daily_pipeline_dq_acceptance.ipynb`.
+
+Notebook kiểm tra:
+
+- trạng thái mới nhất của master và tám child DAG theo đúng `pipeline_run_id` đều là `S`;
+- đủ 14 kết quả DQ đã được lưu vào PostgreSQL và không có critical failure;
+- ba bảng fact không mất lịch sử, không trùng business key và không có orphan SK;
+- current mart, masked mart và bốn bảng marketing có cùng population theo ngày.
+
+Kết quả thực thi được lưu trực tiếp trong notebook. Bộ query độc lập cho Trino
+là `sql_templates/trino/09_daily_pipeline_dq_acceptance.sql`.
+
 ## Controlled Oracle changes
 
 Từ PowerShell tại project root:

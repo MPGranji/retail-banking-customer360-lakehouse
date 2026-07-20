@@ -8,18 +8,25 @@ from datetime import timedelta
 
 from airflow import DAG
 from airflow.models import Variable
-from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 import pendulum
 
-from etl_flag import make_start_flag_task, make_end_flag_task
+from etl_flag import (
+    PIPELINE_RUN_ID_TEMPLATE,
+    PROCESSING_DATE_TEMPLATE,
+    latest_success_sql,
+    make_end_flag_task,
+    make_failure_callback,
+    make_start_flag_task,
+    processing_run_params,
+)
 
 DAG_ID               = "ops_pii_masking_daily_dag"
 APPLICATION_PATH           = "/opt/project/code_etl/shared/ops/pii_masking.py"
 POSTGRES_ETL_CONN_ID = "postgres-etl"
-DEFAULT_COB_DT       = "2025-12-31"
-COB_DT               = "{{ params.cob_dt }}"
+COB_DT               = PROCESSING_DATE_TEMPLATE
+PIPELINE_RUN_ID      = PIPELINE_RUN_ID_TEMPLATE
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -44,9 +51,8 @@ dag = DAG(
     schedule_interval=None,   # sau khi gold hoan tat
     catchup=False,
     max_active_tasks=1,
-    params={
-        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
-    },
+    params=processing_run_params(),
+    on_failure_callback=make_failure_callback(DAG_ID, "ops"),
     tags=["ops", "pii", "masking", "compliance"],
 )
 
@@ -54,13 +60,7 @@ dag = DAG(
 wait_gold_360 = SqlSensor(
     task_id="wait_gold_mart360_dag",
     conn_id=POSTGRES_ETL_CONN_ID,
-    sql=(
-        "SELECT 1 FROM opslakehouse.flag_job_etl "
-        "WHERE job_name = 'gold_mart360_dag' "
-        "  AND status = 'S' "
-        f"  AND cob_dt = '{COB_DT}' "
-        "LIMIT 1"
-    ),
+    sql=latest_success_sql("gold_mart360_dag", COB_DT, PIPELINE_RUN_ID),
     poke_interval=120,
     timeout=7200,
     mode="reschedule",
@@ -70,13 +70,7 @@ wait_gold_360 = SqlSensor(
 wait_silver_customer = SqlSensor(
     task_id="wait_silver_all_dag",
     conn_id=POSTGRES_ETL_CONN_ID,
-    sql=(
-        "SELECT 1 FROM opslakehouse.flag_job_etl "
-        "WHERE job_name = 'silver_all_dag' "
-        "  AND status = 'S' "
-        f"  AND cob_dt = '{COB_DT}' "
-        "LIMIT 1"
-    ),
+    sql=latest_success_sql("silver_all_dag", COB_DT, PIPELINE_RUN_ID),
     poke_interval=120,
     timeout=7200,
     mode="reschedule",

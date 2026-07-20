@@ -78,9 +78,10 @@ class Scd2ConfigContractTest(unittest.TestCase):
         for path in dag_paths:
             with self.subTest(dag=path.name):
                 dag_text = path.read_text(encoding="utf-8")
-                self.assertIn('DEFAULT_COB_DT', dag_text)
-                self.assertIn('{{ params.cob_dt }}', dag_text)
-                self.assertRegex(dag_text, r'"cob_dt": Param\(DEFAULT_COB_DT, type="string", format="date"\)')
+                self.assertIn("PROCESSING_DATE_TEMPLATE", dag_text)
+                self.assertIn("processing_run_params()", dag_text)
+                self.assertNotIn("{{ params.cob_dt }}", dag_text)
+                self.assertNotIn("DEFAULT_COB_DT", dag_text)
 
         silver_dag = dag_paths[-1].read_text(encoding="utf-8")
         self.assertNotIn('"bronze_initial_dag"', silver_dag)

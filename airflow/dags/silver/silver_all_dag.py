@@ -15,17 +15,24 @@ from datetime import timedelta
 
 import pendulum
 from airflow import DAG
-from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
 
-from etl_flag import make_start_flag_task, make_end_flag_task
+from etl_flag import (
+    PIPELINE_RUN_ID_TEMPLATE,
+    PROCESSING_DATE_TEMPLATE,
+    latest_success_sql,
+    make_end_flag_task,
+    make_failure_callback,
+    make_start_flag_task,
+    processing_run_params,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID            = "silver_all_dag"
-DEFAULT_COB_DT    = "2025-12-31"
-DATA_COB_DT       = "{{ params.cob_dt }}"
+DATA_COB_DT       = PROCESSING_DATE_TEMPLATE
+PIPELINE_RUN_ID   = PIPELINE_RUN_ID_TEMPLATE
 POSTGRES_CONN_ID  = "postgres-etl"
 SPARK_CONN_ID     = "spark_default"
 SILVER_BASE       = "/opt/project/code_etl/silver"
@@ -71,27 +78,20 @@ BRONZE_DAG_IDS = ["bronze_core_banking_dag", "bronze_card_crm_dag"]
 
 
 def _check_dag_flag_sql(upstream_dag_id: str) -> str:
-    return (
-        "SELECT 1 FROM opslakehouse.flag_job_etl "
-        f"WHERE job_name = '{upstream_dag_id}' "
-        "  AND status = 'S' "
-        f"  AND cob_dt = DATE '{DATA_COB_DT}' "
-        "LIMIT 1"
-    )
+    return latest_success_sql(upstream_dag_id, DATA_COB_DT, PIPELINE_RUN_ID)
 
 
 # ─── DAG ──────────────────────────────────────────────────────────────────────
 dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="Silver layer — toàn bộ 7 dims + 3 facts (manual build)",
+    description="Silver daily — 7 dimensions + 3 date-scoped facts",
     schedule_interval=None,   # trigger thủ công
     catchup=False,
     max_active_tasks=1,
-    params={
-        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
-    },
-    tags=["silver", "all", "manual"],
+    params=processing_run_params(),
+    on_failure_callback=make_failure_callback(DAG_ID, "silver"),
+    tags=["silver", "daily"],
 )
 
 # ── 1. Cờ DAG-level start ─────────────────────────────────────────────────────
