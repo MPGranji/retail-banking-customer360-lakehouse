@@ -122,7 +122,7 @@ docker compose -f docker/docker-compose.yml exec airflow-scheduler \
 | Trino | localhost:8085 | Connect qua DBeaver |
 | JupyterLab | http://localhost:8888 | — (không cần password) |
 
-> **Jupyter**: Mặc định tắt. Bật bằng `docker compose -f docker/docker-compose.yml --profile jupyter up -d jupyter`. Không chạy đồng thời với Airflow Spark jobs.
+> **Jupyter**: Khởi động cùng stack và dùng thư mục `notebooks/` làm workspace bền vững. Do Spark cluster hiện có một worker nhỏ, không chạy notebook Spark đồng thời với Airflow Spark jobs.
 
 ---
 
@@ -161,7 +161,9 @@ retail-banking-customer360-lakehouse/
 │   │   └── util/               # 1 DAG (util_spark_sql — debug/ad-hoc)
 │   └── plugins/                # ETL flag, JDBC utils
 │
-└── sql_templates/trino/        # 6 business queries
+├── notebooks/                  # Spark/Iceberg baseline và Spark SQL acceptance runbooks
+├── tests/                      # Static contract + isolated Iceberg integration tests
+└── sql_templates/trino/        # 6 business queries + SCD2 acceptance suite
 ```
 
 ---

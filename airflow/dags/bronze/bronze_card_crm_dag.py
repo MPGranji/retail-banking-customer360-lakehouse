@@ -10,6 +10,7 @@ from datetime import timedelta
 
 from airflow import DAG
 from airflow.models import Variable
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.utils.task_group import TaskGroup
 import pendulum
@@ -22,7 +23,8 @@ ETL_PATH           = Variable.get("ETL_PATH", default_var="/opt/project/code_etl
 SPARK_APPLICATION  = f"{ETL_PATH}/bronze/base_job/ingestion_jdbc.py"
 CONFIG_DIR         = Path(ETL_PATH) / "bronze" / "card_crm"
 CONN_ID            = "postgres-card-crm"
-COB_DT             = "2025-12-31"
+DEFAULT_COB_DT     = "2025-12-31"
+COB_DT             = "{{ params.cob_dt }}"
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -45,6 +47,9 @@ dag = DAG(
     schedule_interval=None,
     catchup=False,
     max_active_tasks=1,
+    params={
+        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
+    },
     tags=["bronze", "card_crm", "postgres"],
 )
 
@@ -57,7 +62,7 @@ dag_start = make_start_flag_task(
 
 with TaskGroup("ingest_all", dag=dag) as ingest_all:
     for config_file in CONFIG_DIR.glob("*.yml"):
-        config     = yaml.safe_load(config_file.read_text())
+        config     = yaml.safe_load(config_file.read_text(encoding="utf-8"))
         table_name = config["target"]["table"]
         remote_cfg = f"{CONFIG_DIR}/{config_file.name}"
 

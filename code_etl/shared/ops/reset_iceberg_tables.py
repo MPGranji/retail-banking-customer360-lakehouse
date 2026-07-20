@@ -298,9 +298,14 @@ _CREATE_SILVER = [
     manager_name  STRING,
     open_date     DATE,
     status        STRING,
-    last_updated  TIMESTAMP
+    last_updated  TIMESTAMP,
+    effective_from DATE,
+    effective_to   DATE,
+    is_current     INT,
+    branch_sk      STRING
 )
 USING iceberg
+PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version'               = '2',
     'write.target-file-size-bytes' = '134217728'
@@ -314,9 +319,14 @@ TBLPROPERTIES (
     currency       STRING,
     is_active      INT,
     launch_date    DATE,
-    last_updated   TIMESTAMP
+    last_updated   TIMESTAMP,
+    effective_from DATE,
+    effective_to   DATE,
+    is_current     INT,
+    product_sk     STRING
 )
 USING iceberg
+PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version'               = '2',
     'write.target-file-size-bytes' = '134217728'
