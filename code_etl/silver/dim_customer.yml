@@ -4,6 +4,7 @@ job:
 source:
   tables:
     - bronze.core_customer
+  snapshot_mode: full
 
 target:
   catalog: lakehouse
@@ -15,12 +16,18 @@ business_key:
 
 scd:
   type: 2
+  sk_column: customer_sk
   effective_from_column: effective_from
   effective_to_column: effective_to
   current_flag_column: is_current
+  detect_deletes: true
 
 # Các cột tracked — thay đổi sẽ tạo row SCD2 mới
 tracked_columns:
+  - cccd
+  - full_name
+  - gender
+  - date_of_birth
   - phone
   - email
   - address
@@ -29,6 +36,8 @@ tracked_columns:
   - customer_segment
   - kyc_status
   - branch_code
+  - register_date
+  - is_active
 
 sql: |
   SELECT
