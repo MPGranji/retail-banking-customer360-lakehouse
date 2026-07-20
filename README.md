@@ -45,7 +45,7 @@ LIMIT 1000;
 │  │   BRONZE    │──▶│   SILVER    │──▶│        GOLD         │   │
 │  │  Raw copy   │   │ Clean+SCD2  │   │  Mart Customer 360  │   │
 │  │ 10 tables   │   │ 10 tables   │   │  + Segments + Branch│   │
-│  └─────────────┘   └─────────────┘   │  10 tables          │   │
+│  └─────────────┘   └─────────────┘   │  11 tables          │   │
 │                                       └─────────────────────┘   │
 │                                                                  │
 │  Compute: Apache Spark 3.5    Catalog: Iceberg REST Catalog     │
@@ -149,7 +149,7 @@ retail-banking-customer360-lakehouse/
 ├── code_etl/                   # Spark ETL jobs
 │   ├── bronze/                 # Generic JDBC ingest + 10 YAML configs
 │   ├── silver/                 # SCD1/SCD2/Fact jobs + 10 YAML configs
-│   ├── gold/                   # Gold mart jobs + 9 YAML configs
+│   ├── gold/                   # Gold mart jobs + 11 YAML configs
 │   └── shared/                 # SparkSession, utils, ops (PII masking, maintenance)
 │
 ├── airflow/                    # DAGs + plugins
@@ -161,9 +161,9 @@ retail-banking-customer360-lakehouse/
 │   │   └── util/               # 1 DAG (util_spark_sql — debug/ad-hoc)
 │   └── plugins/                # ETL flag, JDBC utils
 │
-├── notebooks/                  # Spark/Iceberg baseline và Spark SQL acceptance runbooks
+├── notebooks/                  # SCD2 và Customer 360 Spark SQL acceptance runbooks
 ├── tests/                      # Static contract + isolated Iceberg integration tests
-└── sql_templates/trino/        # 6 business queries + SCD2 acceptance suite
+└── sql_templates/trino/        # 6 business queries + SCD2/Gold acceptance suites
 ```
 
 ---

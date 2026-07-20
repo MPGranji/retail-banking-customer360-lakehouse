@@ -35,7 +35,6 @@ WITH penetration AS (
                       AND days_since_last_txn <= 30 THEN 1 END)
                                                          AS cc_opportunity_active_30d
     FROM lakehouse.sandbox.mart_customer_360_masked
-    WHERE cob_dt = DATE '2025-12-31'
     GROUP BY customer_segment, aum_bucket
 )
 SELECT

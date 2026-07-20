@@ -5,11 +5,11 @@ Luồng thực thi:
   1. dag_start ghi cờ R
   2. Kiểm tra silver_all_dag đã hoàn thành
   3. Chạy song song 3 seg jobs (rfm, churn, cross_sell)
-  4. Kiểm tra gold_mart360_dag đã hoàn thành (campaign_target cần mart_customer_360)
+  4. Kiểm tra gold_mart360_dag đã hoàn thành (campaign_target cần mart_customer_360_history)
   5. Chạy campaign_target
   6. dag_end ghi cờ S
 
-DATA_COB_DT: hard-coded theo ngày load dữ liệu fake — thay đổi khi re-generate data.
+DATA_COB_DT nhận từ manual Param ``cob_dt``.
 Trigger sau khi gold_mart360_dag đã hoàn thành.
 """
 
@@ -17,6 +17,7 @@ from datetime import timedelta
 
 import pendulum
 from airflow import DAG
+from airflow.models.param import Param
 from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOperator
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
@@ -25,7 +26,8 @@ from etl_flag import make_start_flag_task, make_end_flag_task
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID           = "gold_segmentation_dag"
-DATA_COB_DT      = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
+DEFAULT_COB_DT   = "2025-12-31"
+DATA_COB_DT      = "{{ params.cob_dt }}"
 POSTGRES_CONN_ID = "postgres-etl"
 SPARK_CONN_ID    = "spark_default"
 GOLD_BASE        = "/opt/project/code_etl/gold"
@@ -72,6 +74,9 @@ dag = DAG(
     schedule_interval=None,   # trigger thủ công, sau khi gold_mart360_dag xong
     catchup=False,
     max_active_tasks=1,
+    params={
+        "cob_dt": Param(DEFAULT_COB_DT, type="string", format="date"),
+    },
     tags=["gold", "segmentation", "manual"],
 )
 
@@ -105,7 +110,7 @@ with TaskGroup("segments", dag=dag) as segments_group:
             dag=dag,
         )
 
-# ── 4. Kiểm tra gold_mart360_dag (campaign_target cần mart_customer_360) ──────
+# ── 4. Kiểm tra gold_mart360_dag (campaign_target cần history snapshot) ──────
 check_mart360 = SqlSensor(
     task_id="check_gold_mart360_dag",
     conn_id=POSTGRES_CONN_ID,

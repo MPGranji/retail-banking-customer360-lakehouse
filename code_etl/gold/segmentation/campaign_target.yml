@@ -6,18 +6,21 @@ source:
     - gold.rfm_segment
     - gold.churn_prediction
     - gold.cross_sell_segment
-    - gold.mart_customer_360
+    - gold.mart_customer_360_history
 
 target:
   catalog: lakehouse
   schema: gold
   table: campaign_target
 
+write:
+  strategy: overwrite_partitions
+
 upstream_flags:
   - gold.rfm_segment
   - gold.churn_prediction
   - gold.cross_sell_segment
-  - gold.mart_customer_360
+  - gold.mart_customer_360_history
 
 sql: |
   SELECT
@@ -57,7 +60,11 @@ sql: |
   FROM lakehouse.gold.rfm_segment r
   LEFT JOIN lakehouse.gold.churn_prediction ch
       ON r.customer_id = ch.customer_id
+      AND r.cob_dt = ch.cob_dt
   LEFT JOIN lakehouse.gold.cross_sell_segment cs
       ON r.customer_id = cs.customer_id
-  LEFT JOIN lakehouse.gold.mart_customer_360 m
+      AND r.cob_dt = cs.cob_dt
+  LEFT JOIN lakehouse.gold.mart_customer_360_history m
       ON r.customer_id = m.customer_id
+      AND r.cob_dt = m.cob_dt
+  WHERE r.cob_dt = DATE '{{ cob_dt }}'

@@ -115,7 +115,6 @@ def create_masked_mart_customer_360(spark, cob_dt: str) -> None:
     spark.sql(f"""
         CREATE OR REPLACE TABLE lakehouse.sandbox.mart_customer_360_masked
         USING iceberg
-        PARTITIONED BY (days(cob_dt))
         TBLPROPERTIES ('format-version' = '2')
         AS
         SELECT
@@ -160,7 +159,6 @@ def create_masked_mart_customer_360(spark, cob_dt: str) -> None:
             cross_sell_credit_card_flag,
             cob_dt
         FROM lakehouse.gold.mart_customer_360
-        WHERE cob_dt = DATE '{cob_dt}'
     """)
 
 def parse_arguments() -> argparse.Namespace:
