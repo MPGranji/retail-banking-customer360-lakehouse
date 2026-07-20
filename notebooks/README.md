@@ -64,6 +64,17 @@ không được ghi vào cell hoặc output.
 
 Bộ query Trino tương ứng là `sql_templates/trino/10_nbo_security_acceptance.sql`.
 
+## Nghiệm thu dashboard serving layer
+
+Sau khi `gold_segmentation_dag` và `ops_pii_masking_daily_dag` thành công cho
+`cob_dt=2026-01-01`, chạy `06_dashboard_data_acceptance.ipynb`. Notebook kiểm tra
+grain `(customer_id, cob_dt)`, population, NBO contract, schema không có raw PII
+và quyền của user Marketing trên bảng
+`sandbox.mart_customer_360_dashboard`. Output được lưu trực tiếp trong notebook.
+
+Bộ query Trino tương ứng là
+`sql_templates/trino/11_dashboard_serving_acceptance.sql`.
+
 ## Controlled Oracle changes
 
 Từ PowerShell tại project root:
