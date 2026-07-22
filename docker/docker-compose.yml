@@ -15,6 +15,8 @@
 #                                         │   airflow-scheduler              │
 #                                         │                                  │
 #   trino ──────────────────────────────┘                                   │
+#       │                                                                   │
+#   superset (profile bi, đọc Trino/Sandbox)                                │
 #   (trino đọc trực tiếp từ iceberg-rest)                                   │
 #   (oracle/postgres cung cấp data nguồn qua JDBC)─────────────────────────┘
 #
@@ -41,10 +43,12 @@
 #   spark-master     400m  │ coordinate only
 #   spark-worker-1  1600m  │ 1 executor: 768m + 256m overhead + JVM 576m
 #   trino           1200m  │ heap 768m + code-cache 128m + JVM overhead ~304m
+#   superset         900m  │ optional BI profile
 #   airflow-web      800m  │ web UI (1 Gunicorn worker)
 #   airflow-sched   1300m  │ driver 512m + 192m overhead + scheduler base 400m + buffer 196m
 #   ─────────────────────────────────────────────────────────────────────────
-#   TOTAL           8668m  │ headroom ~1.3GB cho kernel + file cache OS
+#   TOTAL           8668m  │ default stack, không gồm Superset
+#   TOTAL + BI      9568m  │ khi bật thêm profile bi
 #
 # Network: lakehouse_net (tất cả service join cùng 1 network bridge)
 #
@@ -427,8 +431,8 @@ services:
   # ---------------------------------------------------------------------------
   # Trino — federated query engine (ad-hoc analytics / BI)
   # Port:    8085 → 8080
-  # Client:  DBeaver — jdbc:trino://localhost:8085/iceberg
-  # UI:      http://localhost:8085
+  # Client:  DBeaver — jdbc:trino://localhost:8085/lakehouse?SSL=true
+  # UI:      https://localhost:8085 (self-signed certificate in local demo)
   # ---------------------------------------------------------------------------
   trino:
     image: trinodb/trino:481
@@ -438,11 +442,18 @@ services:
     environment:
       MINIO_ROOT_USER: ${MINIO_ROOT_USER}
       MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD}
+      TRINO_KEYSTORE_PASSWORD: ${TRINO_KEYSTORE_PASSWORD}
+      TRINO_SHARED_SECRET: ${TRINO_SHARED_SECRET}
+      TRINO_MARKETING_PASSWORD: ${TRINO_MARKETING_PASSWORD}
+      TRINO_ENGINEERING_PASSWORD: ${TRINO_ENGINEERING_PASSWORD}
     ports:
-      - "8085:8080"
+      - "8085:8443"
     volumes:
-      - ./trino/etc:/etc/trino
-      - ./trino/catalog:/etc/trino/catalog
+      - ./trino/etc:/etc/trino:ro
+      - ./trino/catalog:/etc/trino/catalog:ro
+      - ./trino/security:/opt/trino-security:ro
+      - ./volumes/trino-security:/var/trino/security
+    entrypoint: ["/bin/sh", "/opt/trino-security/start-secure-trino.sh"]
     # heap 768m + code-cache 128m + metaspace/threads ~304m ≈ 1.2g
     mem_limit: 1200m
     depends_on:
@@ -450,11 +461,59 @@ services:
         condition: service_healthy
     healthcheck:
       # /v1/info nhanh hơn chạy trino CLI — không cần client session
-      test: ["CMD-SHELL", "curl -sf http://localhost:8080/v1/info > /dev/null || exit 1"]
+      test: ["CMD-SHELL", "curl -ksf https://localhost:8443/v1/info > /dev/null || exit 1"]
       interval: 20s
       timeout: 10s
       retries: 5
       start_period: 30s
+    networks:
+      - lakehouse_net
+
+  # ---------------------------------------------------------------------------
+  # Superset — optional BI dashboard UI over Trino/Sandbox
+  # Port:    8088
+  # UI:      http://localhost:8088
+  # Start:   docker compose --profile bi up -d --build superset
+  # ---------------------------------------------------------------------------
+  superset:
+    profiles: ["bi"]
+    build:
+      context: ./superset
+      dockerfile: Dockerfile
+      args:
+        SUPERSET_VERSION: ${SUPERSET_VERSION:-6.0.0}
+    image: lakehouse-superset:${SUPERSET_VERSION:-6.0.0}
+    container_name: superset
+    hostname: superset
+    env_file: .env
+    environment:
+      SUPERSET_SECRET_KEY: ${SUPERSET_SECRET_KEY:-dev-only-change-me-superset-secret-key}
+      SUPERSET_ADMIN_USER: ${SUPERSET_ADMIN_USER:-admin}
+      SUPERSET_ADMIN_PASSWORD: ${SUPERSET_ADMIN_PASSWORD:-admin}
+      SUPERSET_ADMIN_EMAIL: ${SUPERSET_ADMIN_EMAIL:-admin@lakehouse.local}
+      SUPERSET_TRINO_HOST: trino
+      SUPERSET_TRINO_PORT: "8443"
+      SUPERSET_TRINO_CATALOG: lakehouse
+      SUPERSET_TRINO_SCHEMA: sandbox
+      SUPERSET_TRINO_USER: ${SUPERSET_TRINO_USER:-marketing}
+      SUPERSET_TRINO_PASSWORD: ${TRINO_MARKETING_PASSWORD}
+      SUPERSET_TRINO_VERIFY_SSL: ${SUPERSET_TRINO_VERIFY_SSL:-false}
+      SUPERSET_LOAD_EXAMPLES: "false"
+      TZ: "Asia/Ho_Chi_Minh"
+    ports:
+      - "8088:8088"
+    volumes:
+      - superset-home:/app/superset_home
+    mem_limit: 900m
+    depends_on:
+      trino:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://localhost:8088/health', timeout=5)\""]
+      interval: 20s
+      timeout: 10s
+      retries: 8
+      start_period: 90s
     networks:
       - lakehouse_net
 
@@ -555,6 +614,8 @@ volumes:
   airflow-logs:      # Airflow task logs local staging
     driver: local
   spark-work-1:      # Executor work dir worker-1
+    driver: local
+  superset-home:     # Superset metadata DB + imported datasource config
     driver: local
 
 # =============================================================================

@@ -4,6 +4,7 @@ job:
 source:
   tables:
     - bronze.core_account
+  snapshot_mode: full
 
 target:
   catalog: lakehouse
@@ -15,15 +16,24 @@ business_key:
 
 scd:
   type: 2
+  sk_column: account_sk
   effective_from_column: effective_from
   effective_to_column: effective_to
   current_flag_column: is_current
+  detect_deletes: true
 
-# Theo dõi thay đổi balance, status, close_date
+# Theo dõi toàn bộ thuộc tính nghiệp vụ; last_updated là metadata kỹ thuật.
 tracked_columns:
+  - account_no
+  - customer_id
+  - product_code
+  - branch_code
+  - account_type
+  - currency
   - balance
-  - status
+  - open_date
   - close_date
+  - status
 
 sql: |
   SELECT

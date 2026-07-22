@@ -30,16 +30,20 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.utils.task_group import TaskGroup
 
 from jdbc_conn_utils import jdbc_jinja_args
-from etl_flag import make_start_flag_task, make_end_flag_task
+from etl_flag import (
+    PROCESSING_DATE_TEMPLATE,
+    make_end_flag_task,
+    make_failure_callback,
+    make_start_flag_task,
+    processing_run_params,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID            = "bronze_initial_dag"
 SPARK_APPLICATION = "/opt/project/code_etl/bronze/base_job/ingestion_jdbc.py"
 REMOTE_CONFIG_DIR = "/opt/project/code_etl/bronze/initial"
 
-# Ngày ghi vào flag_job_etl — đại diện cho đợt initial load này.
-# Đặt trùng với ngày cuối của dữ liệu fake để silver có thể check flag đúng.
-INITIAL_COB_DT = "2025-12-31"
+INITIAL_COB_DT = PROCESSING_DATE_TEMPLATE
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -70,6 +74,8 @@ dag = DAG(
     schedule_interval=None,   # trigger thủ công 1 lần duy nhất
     catchup=False,
     max_active_tasks=1,
+    params=processing_run_params(),
+    on_failure_callback=make_failure_callback(DAG_ID, "bronze"),
     tags=["bronze", "initial", "one-time"],
 )
 

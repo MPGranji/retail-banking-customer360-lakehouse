@@ -13,6 +13,9 @@ target:
   schema: gold
   table: cross_sell_segment
 
+write:
+  strategy: overwrite_partitions
+
 upstream_flags:
   - silver.dim_customer
   - silver.dim_card
@@ -20,43 +23,48 @@ upstream_flags:
   - silver.dim_loan
 
 sql: |
+  WITH customers AS (
+      SELECT customer_id, customer_sk, customer_segment
+      FROM lakehouse.silver.dim_customer
+      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
+  ),
+  card_holding AS (
+      SELECT
+          customer_id,
+          COUNT(DISTINCT CASE WHEN card_type = 'CREDIT' AND status = 'ACTIVE' THEN card_id END)
+              AS active_credit_cards
+      FROM lakehouse.silver.dim_card
+      GROUP BY customer_id
+  ),
+  deposit_holding AS (
+      SELECT
+          customer_id,
+          COUNT(DISTINCT CASE WHEN status = 'ACTIVE' THEN deposit_id END) AS active_deposits
+      FROM lakehouse.silver.dim_deposit
+      GROUP BY customer_id
+  ),
+  loan_holding AS (
+      SELECT
+          customer_id,
+          COUNT(DISTINCT CASE WHEN loan_status = 'ACTIVE' THEN loan_id END) AS active_loans
+      FROM lakehouse.silver.dim_loan
+      GROUP BY customer_id
+  )
   SELECT
       c.customer_id,
       c.customer_sk,
       c.customer_segment,
-      -- Flags sản phẩm chưa có (dùng status = 'ACTIVE', không phải card_status)
-      CASE WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
-                                    AND cd.status = 'ACTIVE' THEN cd.card_id END) = 0
-           THEN 1 ELSE 0 END         AS no_credit_card,
-      CASE WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'
-                                    THEN d.deposit_id END) = 0
-           THEN 1 ELSE 0 END         AS no_deposit,
-      CASE WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'
-                                    THEN l.loan_id END) = 0
-           THEN 1 ELSE 0 END         AS no_loan,
-      -- Cơ hội cross-sell ưu tiên nhất
+      CASE WHEN COALESCE(cd.active_credit_cards, 0) = 0 THEN 1 ELSE 0 END AS no_credit_card,
+      CASE WHEN COALESCE(d.active_deposits, 0) = 0 THEN 1 ELSE 0 END AS no_deposit,
+      CASE WHEN COALESCE(l.active_loans, 0) = 0 THEN 1 ELSE 0 END AS no_loan,
       CASE
-          WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
-                                   AND cd.status = 'ACTIVE' THEN cd.card_id END) = 0
-               THEN 'Credit Card'
-          WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'
-                                   THEN d.deposit_id END) = 0
-               THEN 'Deposit'
-          WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'
-                                   THEN l.loan_id END) = 0
-               THEN 'Loan'
+          WHEN COALESCE(cd.active_credit_cards, 0) = 0 THEN 'Credit Card'
+          WHEN COALESCE(d.active_deposits, 0) = 0 THEN 'Deposit'
+          WHEN COALESCE(l.active_loans, 0) = 0 THEN 'Loan'
           ELSE 'None'
-      END                            AS primary_opportunity,
-      DATE '{{ cob_dt }}'                   AS cob_dt
-  FROM lakehouse.silver.dim_customer c
-  LEFT JOIN lakehouse.silver.dim_card cd
-      ON c.customer_id = cd.customer_id
-  LEFT JOIN lakehouse.silver.dim_deposit d
-      ON c.customer_id = d.customer_id
-  LEFT JOIN lakehouse.silver.dim_loan l
-      ON c.customer_id = l.customer_id
-  WHERE c.is_current = 1
-  GROUP BY
-      c.customer_id,
-      c.customer_sk,
-      c.customer_segment
+      END AS primary_opportunity,
+      DATE '{{ cob_dt }}' AS cob_dt
+  FROM customers c
+  LEFT JOIN card_holding cd ON c.customer_id = cd.customer_id
+  LEFT JOIN deposit_holding d ON c.customer_id = d.customer_id
+  LEFT JOIN loan_holding l ON c.customer_id = l.customer_id

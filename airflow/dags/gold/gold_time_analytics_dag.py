@@ -19,11 +19,20 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
 
-from etl_flag import make_start_flag_task, make_end_flag_task
+from etl_flag import (
+    PIPELINE_RUN_ID_TEMPLATE,
+    PROCESSING_DATE_TEMPLATE,
+    latest_success_sql,
+    make_end_flag_task,
+    make_failure_callback,
+    make_start_flag_task,
+    processing_run_params,
+)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID           = "gold_time_analytics_dag"
-DATA_COB_DT      = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
+DATA_COB_DT      = PROCESSING_DATE_TEMPLATE
+PIPELINE_RUN_ID  = PIPELINE_RUN_ID_TEMPLATE
 POSTGRES_CONN_ID = "postgres-etl"
 SPARK_CONN_ID    = "spark_default"
 GOLD_BASE        = "/opt/project/code_etl/gold"
@@ -50,13 +59,7 @@ TIME_ANALYTICS_JOBS = [
 
 
 def _check_dag_flag_sql(upstream_dag_id: str) -> str:
-    return (
-        "SELECT 1 FROM opslakehouse.flag_job_etl "
-        f"WHERE job_name = '{upstream_dag_id}' "
-        "  AND status = 'S' "
-        f"  AND cob_dt = DATE '{DATA_COB_DT}' "
-        "LIMIT 1"
-    )
+    return latest_success_sql(upstream_dag_id, DATA_COB_DT, PIPELINE_RUN_ID)
 
 
 # ─── DAG ──────────────────────────────────────────────────────────────────────
@@ -67,6 +70,8 @@ dag = DAG(
     schedule_interval=None,   # trigger thủ công
     catchup=False,
     max_active_tasks=1,
+    params=processing_run_params(),
+    on_failure_callback=make_failure_callback(DAG_ID, "gold"),
     tags=["gold", "time_analytics", "manual"],
 )
 

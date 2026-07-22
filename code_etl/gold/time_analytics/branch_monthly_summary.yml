@@ -12,6 +12,9 @@ target:
   schema: gold
   table: mart_branch_monthly_summary
 
+write:
+  strategy: overwrite_partitions
+
 upstream_flags:
   - silver.dim_branch
   - silver.dim_account
@@ -35,7 +38,7 @@ sql: |
       FROM lakehouse.silver.fact_txn_account t
       JOIN lakehouse.silver.dim_account da
           ON  t.account_id   = da.account_id
-          AND da.is_current  = 1
+          AND CAST(t.txn_date AS DATE) BETWEEN da.effective_from AND da.effective_to
       GROUP BY
           da.branch_code,
           YEAR(CAST(t.txn_date AS DATE)),
@@ -60,7 +63,7 @@ sql: |
       FROM lakehouse.silver.fact_txn_account t
       JOIN lakehouse.silver.dim_account da
           ON  t.account_id   = da.account_id
-          AND da.is_current  = 1
+          AND CAST(t.txn_date AS DATE) BETWEEN da.effective_from AND da.effective_to
       GROUP BY
           da.branch_code,
           YEAR(CAST(t.txn_date AS DATE)),
@@ -99,6 +102,7 @@ sql: |
   FROM txn_monthly m
   LEFT JOIN lakehouse.silver.dim_branch db
       ON  m.branch_code = db.branch_code
+      AND DATE '{{ cob_dt }}' BETWEEN db.effective_from AND db.effective_to
   LEFT JOIN top_channel tc
       ON  m.branch_code = tc.branch_code
       AND m.txn_year    = tc.txn_year
