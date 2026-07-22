@@ -15,10 +15,6 @@ target:
 business_key:
   - txn_id
 
-load:
-  mode: daily
-  partition_column: cob_dt
-
 sql: |
   SELECT
       t.txn_id,
@@ -39,8 +35,7 @@ sql: |
   FROM lakehouse.bronze.core_txn_account t
   LEFT JOIN lakehouse.silver.dim_account a
       ON t.account_id = a.account_id
-      AND CAST(t.txn_date AS DATE) BETWEEN a.effective_from AND a.effective_to
+      AND a.is_current = 1
   LEFT JOIN lakehouse.silver.dim_customer c
       ON t.customer_id = c.customer_id
-      AND CAST(t.txn_date AS DATE) BETWEEN c.effective_from AND c.effective_to
-  WHERE t.cob_dt = DATE '{{ cob_dt }}'
+      AND c.is_current = 1

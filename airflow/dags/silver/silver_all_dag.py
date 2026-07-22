@@ -8,7 +8,7 @@ Luồng thực thi:
   4. Sau khi dims xong, chạy song song 3 fact jobs
   5. dag_end ghi cờ S
 
-DATA_COB_DT nhận từ manual Param ``cob_dt`` và mặc định là ngày baseline demo.
+DATA_COB_DT: hard-coded theo ngày load dữ liệu fake — thay đổi khi re-generate data.
 """
 
 from datetime import timedelta
@@ -19,20 +19,11 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
 
-from etl_flag import (
-    PIPELINE_RUN_ID_TEMPLATE,
-    PROCESSING_DATE_TEMPLATE,
-    latest_success_sql,
-    make_end_flag_task,
-    make_failure_callback,
-    make_start_flag_task,
-    processing_run_params,
-)
+from etl_flag import make_start_flag_task, make_end_flag_task
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID            = "silver_all_dag"
-DATA_COB_DT       = PROCESSING_DATE_TEMPLATE
-PIPELINE_RUN_ID   = PIPELINE_RUN_ID_TEMPLATE
+DATA_COB_DT       = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
 POSTGRES_CONN_ID  = "postgres-etl"
 SPARK_CONN_ID     = "spark_default"
 SILVER_BASE       = "/opt/project/code_etl/silver"
@@ -57,8 +48,8 @@ SPARK_CONF = {
 # Các task trong TaskGroup có thể chạy song song khi tăng max_active_tasks.
 # Với max_active_tasks=1 (chỉ 1 Spark executor), chúng chạy tuần tự.
 DIM_JOBS = [
-    ("dim_branch",   "scd_type2.py", "dim_branch.yml"),
-    ("dim_product",  "scd_type2.py", "dim_product.yml"),
+    ("dim_branch",   "scd_type1.py", "dim_branch.yml"),
+    ("dim_product",  "scd_type1.py", "dim_product.yml"),
     ("dim_customer", "scd_type2.py", "dim_customer.yml"),
     ("dim_account",  "scd_type2.py", "dim_account.yml"),
     ("dim_deposit",  "scd_type1.py", "dim_deposit.yml"),
@@ -73,25 +64,30 @@ FACT_JOBS = [
     ("fact_crm_interaction", "fact_txn.py", "fact_crm_interaction.yml"),
 ]
 
-# Initial history là prerequisite một lần khi dựng môi trường, không phải daily dependency.
-BRONZE_DAG_IDS = ["bronze_core_banking_dag", "bronze_card_crm_dag"]
+# Bronze DAG IDs cần check trước khi chạy.
+# bronze_initial_dag: phải hoàn thành để fact tables (txn, card_txn, crm) có data.
+BRONZE_DAG_IDS = ["bronze_core_banking_dag", "bronze_card_crm_dag", "bronze_initial_dag"]
 
 
 def _check_dag_flag_sql(upstream_dag_id: str) -> str:
-    return latest_success_sql(upstream_dag_id, DATA_COB_DT, PIPELINE_RUN_ID)
+    return (
+        "SELECT 1 FROM opslakehouse.flag_job_etl "
+        f"WHERE job_name = '{upstream_dag_id}' "
+        "  AND status = 'S' "
+        f"  AND cob_dt = DATE '{DATA_COB_DT}' "
+        "LIMIT 1"
+    )
 
 
 # ─── DAG ──────────────────────────────────────────────────────────────────────
 dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="Silver daily — 7 dimensions + 3 date-scoped facts",
+    description="Silver layer — toàn bộ 7 dims + 3 facts (manual build)",
     schedule_interval=None,   # trigger thủ công
     catchup=False,
     max_active_tasks=1,
-    params=processing_run_params(),
-    on_failure_callback=make_failure_callback(DAG_ID, "silver"),
-    tags=["silver", "daily"],
+    tags=["silver", "all", "manual"],
 )
 
 # ── 1. Cờ DAG-level start ─────────────────────────────────────────────────────

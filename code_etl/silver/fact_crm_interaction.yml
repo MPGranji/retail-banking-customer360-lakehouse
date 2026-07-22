@@ -14,10 +14,6 @@ target:
 business_key:
   - interaction_id
 
-load:
-  mode: daily
-  partition_column: cob_dt
-
 sql: |
   SELECT
       i.interaction_id,
@@ -35,5 +31,4 @@ sql: |
   FROM lakehouse.bronze.crm_interaction i
   LEFT JOIN lakehouse.silver.dim_customer c
       ON i.customer_id = c.customer_id
-      AND CAST(i.interaction_date AS DATE) BETWEEN c.effective_from AND c.effective_to
-  WHERE i.cob_dt = DATE '{{ cob_dt }}'
+      AND c.is_current = 1

@@ -15,20 +15,14 @@ from airflow.utils.task_group import TaskGroup
 import pendulum
 
 from jdbc_conn_utils import jdbc_jinja_args
-from etl_flag import (
-    PROCESSING_DATE_TEMPLATE,
-    make_end_flag_task,
-    make_failure_callback,
-    make_start_flag_task,
-    processing_run_params,
-)
+from etl_flag import make_start_flag_task, make_end_flag_task
 
 DAG_ID             = "bronze_core_banking_dag"
 ETL_PATH           = Variable.get("ETL_PATH", default_var="/opt/project/code_etl")
 SPARK_APPLICATION  = f"{ETL_PATH}/bronze/base_job/ingestion_jdbc.py"
 CONFIG_DIR         = Path(ETL_PATH) / "bronze" / "core_banking"
 CONN_ID            = "oracle-core"
-COB_DT             = PROCESSING_DATE_TEMPLATE
+COB_DT             = "2025-12-31"
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -51,8 +45,6 @@ dag = DAG(
     schedule_interval=None,
     catchup=False,
     max_active_tasks=1,
-    params=processing_run_params(),
-    on_failure_callback=make_failure_callback(DAG_ID, "bronze"),
     tags=["bronze", "core_banking", "oracle"],
 )
 
@@ -65,7 +57,7 @@ dag_start = make_start_flag_task(
 
 with TaskGroup("ingest_all", dag=dag) as ingest_all:
     for config_file in CONFIG_DIR.glob("*.yml"):
-        config     = yaml.safe_load(config_file.read_text(encoding="utf-8"))
+        config     = yaml.safe_load(config_file.read_text())
         table_name = config["target"]["table"]
         remote_cfg = f"{CONFIG_DIR}/{config_file.name}"
 

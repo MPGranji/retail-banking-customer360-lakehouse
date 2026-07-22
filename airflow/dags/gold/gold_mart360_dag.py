@@ -1,14 +1,13 @@
 """
-Gold layer DAG — tổng hợp Customer 360 history/current và 4 bảng summary.
+Gold layer DAG — tổng hợp 5 bảng mart360.
 
 Luồng thực thi:
   1. dag_start ghi cờ R
   2. Kiểm tra silver_all_dag đã hoàn thành (theo dag_id)
-  3. Chạy history song song với 4 summary jobs
-  4. Refresh current mart sau khi history hoàn thành
-  5. dag_end ghi cờ S
+  3. Chạy song song 5 mart360 jobs
+  4. dag_end ghi cờ S
 
-DATA_COB_DT nhận từ manual Param ``cob_dt``.
+DATA_COB_DT: hard-coded theo ngày load dữ liệu fake — thay đổi khi re-generate data.
 """
 
 from datetime import timedelta
@@ -19,20 +18,11 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
 
-from etl_flag import (
-    PIPELINE_RUN_ID_TEMPLATE,
-    PROCESSING_DATE_TEMPLATE,
-    latest_success_sql,
-    make_end_flag_task,
-    make_failure_callback,
-    make_start_flag_task,
-    processing_run_params,
-)
+from etl_flag import make_start_flag_task, make_end_flag_task
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID           = "gold_mart360_dag"
-DATA_COB_DT      = PROCESSING_DATE_TEMPLATE
-PIPELINE_RUN_ID  = PIPELINE_RUN_ID_TEMPLATE
+DATA_COB_DT      = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
 POSTGRES_CONN_ID = "postgres-etl"
 SPARK_CONN_ID    = "spark_default"
 GOLD_BASE        = "/opt/project/code_etl/gold"
@@ -53,8 +43,9 @@ SPARK_CONF = {
     "spark.executor.cores":  "1",
 }
 
-# (table_name, config_file) — không phụ thuộc history/current
-SUMMARY_JOBS = [
+# (table_name, config_file)
+MART360_JOBS = [
+    ("mart_customer_360",            "customer_360.yml"),
     ("customer_balance_summary",     "customer_balance_summary.yml"),
     ("customer_card_summary",        "customer_card_summary.yml"),
     ("customer_product_summary",     "customer_product_summary.yml"),
@@ -63,7 +54,13 @@ SUMMARY_JOBS = [
 
 
 def _check_dag_flag_sql(upstream_dag_id: str) -> str:
-    return latest_success_sql(upstream_dag_id, DATA_COB_DT, PIPELINE_RUN_ID)
+    return (
+        "SELECT 1 FROM opslakehouse.flag_job_etl "
+        f"WHERE job_name = '{upstream_dag_id}' "
+        "  AND status = 'S' "
+        f"  AND cob_dt = DATE '{DATA_COB_DT}' "
+        "LIMIT 1"
+    )
 
 
 # ─── DAG ──────────────────────────────────────────────────────────────────────
@@ -74,8 +71,6 @@ dag = DAG(
     schedule_interval=None,   # trigger thủ công
     catchup=False,
     max_active_tasks=1,
-    params=processing_run_params(),
-    on_failure_callback=make_failure_callback(DAG_ID, "gold"),
     tags=["gold", "mart360", "manual"],
 )
 
@@ -93,9 +88,9 @@ check_silver = SqlSensor(
     dag=dag,
 )
 
-# ── 3. Bốn summary jobs độc lập ──────────────────────────────────────────────
-with TaskGroup("summaries", dag=dag) as summaries_group:
-    for table_name, config_file in SUMMARY_JOBS:
+# ── 3. Mart360 jobs (tất cả song song) ────────────────────────────────────────
+with TaskGroup("mart360", dag=dag) as mart360_group:
+    for table_name, config_file in MART360_JOBS:
         SparkSubmitOperator(
             task_id=f"run_{table_name}",
             application=f"{GOLD_BASE_JOB}/gold_job.py",
@@ -109,38 +104,8 @@ with TaskGroup("summaries", dag=dag) as summaries_group:
             dag=dag,
         )
 
-run_history = SparkSubmitOperator(
-    task_id="run_mart_customer_360_history",
-    application=f"{GOLD_BASE_JOB}/gold_job.py",
-    conn_id=SPARK_CONN_ID,
-    conf=SPARK_CONF,
-    application_args=[
-        "--config", f"{GOLD_MART360}/customer_360_history.yml",
-        "--cob_dt", DATA_COB_DT,
-    ],
-    verbose=True,
-    dag=dag,
-)
-
-# Current chỉ đọc partition history vừa hoàn thành và full-overwrite serving table.
-run_current = SparkSubmitOperator(
-    task_id="run_mart_customer_360",
-    application=f"{GOLD_BASE_JOB}/gold_job.py",
-    conn_id=SPARK_CONN_ID,
-    conf=SPARK_CONF,
-    application_args=[
-        "--config", f"{GOLD_MART360}/customer_360.yml",
-        "--cob_dt", DATA_COB_DT,
-    ],
-    verbose=True,
-    dag=dag,
-)
-
 # ── 4. Cờ DAG-level end ───────────────────────────────────────────────────────
 dag_end = make_end_flag_task("dag_end", DAG_ID, "gold", dag, cob_dt=DATA_COB_DT)
 
 # ─── Task dependencies ────────────────────────────────────────────────────────
-dag_start >> check_silver
-check_silver >> [summaries_group, run_history]
-run_history >> run_current
-[summaries_group, run_current] >> dag_end
+dag_start >> check_silver >> mart360_group >> dag_end

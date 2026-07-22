@@ -14,7 +14,8 @@
 
 -- ─── DIMENSION TABLES ────────────────────────────────
 
--- dim_branch: SCD Type 2 — lưu lịch sử thay đổi chi nhánh
+-- dim_branch: SCD Type 1 — MERGE IN-PLACE, không có lịch sử
+-- Nguồn: bronze.core_branch | Cột: đúng với SELECT trong dim_branch.yml
 CREATE TABLE lakehouse.silver.dim_branch (
     branch_code   STRING,
     branch_name   STRING,
@@ -24,21 +25,17 @@ CREATE TABLE lakehouse.silver.dim_branch (
     address       STRING,
     manager_name  STRING,
     open_date     DATE,
-    status         STRING,
-    last_updated   TIMESTAMP,
-    effective_from DATE,
-    effective_to   DATE,
-    is_current     INT,
-    branch_sk      STRING
+    status        STRING,
+    last_updated  TIMESTAMP
 )
 USING iceberg
-PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version' = '2',
     'write.target-file-size-bytes' = '134217728'
 );
 
--- dim_product: SCD Type 2 — lưu lịch sử thay đổi sản phẩm
+-- dim_product: SCD Type 1 — MERGE IN-PLACE, không có lịch sử
+-- Nguồn: bronze.core_product | Cột: đúng với SELECT trong dim_product.yml
 CREATE TABLE lakehouse.silver.dim_product (
     product_code   STRING,
     product_name   STRING,
@@ -46,15 +43,10 @@ CREATE TABLE lakehouse.silver.dim_product (
     product_type   STRING,
     currency       STRING,
     is_active      INT,
-    launch_date     DATE,
-    last_updated    TIMESTAMP,
-    effective_from  DATE,
-    effective_to    DATE,
-    is_current      INT,
-    product_sk      STRING
+    launch_date    DATE,
+    last_updated   TIMESTAMP
 )
 USING iceberg
-PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version' = '2',
     'write.target-file-size-bytes' = '134217728'

@@ -28,6 +28,7 @@ SELECT
     -- Active customers (giao dịch trong 30 ngày)
     COUNT(CASE WHEN days_since_last_txn <= 30 THEN 1 END) AS active_30d
 FROM lakehouse.sandbox.mart_customer_360_masked
+WHERE cob_dt = DATE '2025-12-31'
 GROUP BY
     SUBSTR(primary_branch_code, 1, 3),
     primary_branch_code

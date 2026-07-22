@@ -54,4 +54,5 @@ FROM lakehouse.sandbox.mart_customer_360_masked m
 LEFT JOIN lakehouse.gold.campaign_target ct
     ON m.customer_id = ct.customer_id
     AND ct.cob_dt = m.cob_dt
-WHERE m.customer_id = 10001;             -- thay bằng customer_id cần tra cứu
+WHERE m.customer_id = 10001              -- thay bằng customer_id cần tra cứu
+  AND m.cob_dt = DATE '2025-12-31';

@@ -26,12 +26,6 @@ logger = logging.getLogger("reset_iceberg_tables")
 
 # ─── DROP statements — thứ tự gold → silver → bronze ────────────────────────
 # PURGE: xóa cả metadata trên catalog REST + đánh dấu data files để dọn trên MinIO
-_DROP_SANDBOX = [
-    "DROP TABLE IF EXISTS lakehouse.sandbox.mart_customer_360_dashboard PURGE",
-    "DROP TABLE IF EXISTS lakehouse.sandbox.mart_customer_360_masked PURGE",
-    "DROP TABLE IF EXISTS lakehouse.sandbox.dim_customer_masked PURGE",
-]
-
 _DROP_GOLD = [
     "DROP TABLE IF EXISTS lakehouse.gold.campaign_target PURGE",
     "DROP TABLE IF EXISTS lakehouse.gold.cross_sell_segment PURGE",
@@ -42,7 +36,6 @@ _DROP_GOLD = [
     "DROP TABLE IF EXISTS lakehouse.gold.customer_transaction_summary PURGE",
     "DROP TABLE IF EXISTS lakehouse.gold.customer_balance_summary PURGE",
     "DROP TABLE IF EXISTS lakehouse.gold.mart_customer_360 PURGE",
-    "DROP TABLE IF EXISTS lakehouse.gold.mart_customer_360_history PURGE",
     "DROP TABLE IF EXISTS lakehouse.gold.mart_branch_monthly_summary PURGE",
 ]
 
@@ -305,14 +298,9 @@ _CREATE_SILVER = [
     manager_name  STRING,
     open_date     DATE,
     status        STRING,
-    last_updated  TIMESTAMP,
-    effective_from DATE,
-    effective_to   DATE,
-    is_current     INT,
-    branch_sk      STRING
+    last_updated  TIMESTAMP
 )
 USING iceberg
-PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version'               = '2',
     'write.target-file-size-bytes' = '134217728'
@@ -326,14 +314,9 @@ TBLPROPERTIES (
     currency       STRING,
     is_active      INT,
     launch_date    DATE,
-    last_updated   TIMESTAMP,
-    effective_from DATE,
-    effective_to   DATE,
-    is_current     INT,
-    product_sk     STRING
+    last_updated   TIMESTAMP
 )
 USING iceberg
-PARTITIONED BY (is_current)
 TBLPROPERTIES (
     'format-version'               = '2',
     'write.target-file-size-bytes' = '134217728'
@@ -523,47 +506,6 @@ TBLPROPERTIES (
 
 _CREATE_GOLD = [
     """CREATE TABLE IF NOT EXISTS lakehouse.gold.mart_customer_360 (
-    customer_id                 BIGINT,
-    customer_sk                 STRING,
-    full_name_masked            STRING,
-    age                         INT,
-    gender                      STRING,
-    primary_branch_code         STRING,
-    customer_segment            STRING,
-    kyc_status                  STRING,
-    register_date               DATE,
-    total_accounts              INT,
-    total_cards                 INT,
-    total_loans                 INT,
-    has_credit_card             INT,
-    has_savings                 INT,
-    has_loan                    INT,
-    total_deposit_balance       DECIMAL(18,2),
-    total_loan_outstanding      DECIMAL(18,2),
-    aum_total                   DECIMAL(18,2),
-    aum_bucket                  STRING,
-    txn_count_30d               BIGINT,
-    txn_amount_30d              DECIMAL(18,2),
-    last_txn_date               TIMESTAMP,
-    days_since_last_txn         INT,
-    primary_channel             STRING,
-    interaction_count_90d       BIGINT,
-    last_interaction_date       TIMESTAMP,
-    rfm_recency_score           INT,
-    rfm_frequency_score         INT,
-    rfm_monetary_score          INT,
-    rfm_segment                 STRING,
-    churn_flag                  INT,
-    cross_sell_credit_card_flag INT,
-    cob_dt                      DATE
-)
-USING iceberg
-TBLPROPERTIES (
-    'format-version'               = '2',
-    'write.target-file-size-bytes' = '134217728'
-)""",
-
-    """CREATE TABLE IF NOT EXISTS lakehouse.gold.mart_customer_360_history (
     customer_id                 BIGINT,
     customer_sk                 STRING,
     full_name_masked            STRING,
@@ -791,71 +733,8 @@ TBLPROPERTIES (
     no_credit_card        INT,
     no_deposit            INT,
     no_loan               INT,
-    cross_sell_score      INT,
-    recommended_product   STRING,
-    recommendation_reason STRING,
-    campaign_priority     STRING,
-    contact_eligible_flag INT,
-    suppression_reason    STRING,
     campaign_type         STRING,
     cob_dt                DATE
-)
-USING iceberg
-PARTITIONED BY (days(cob_dt))
-TBLPROPERTIES (
-    'format-version'               = '2',
-    'write.target-file-size-bytes' = '134217728'
-)""",
-]
-
-_CREATE_SANDBOX = [
-    """CREATE TABLE IF NOT EXISTS lakehouse.sandbox.mart_customer_360_dashboard (
-    customer_id                 BIGINT,
-    customer_sk                 STRING,
-    full_name_masked            STRING,
-    age                         INT,
-    age_group                   STRING,
-    gender                      STRING,
-    primary_branch_code         STRING,
-    customer_segment            STRING,
-    kyc_status                  STRING,
-    register_date               DATE,
-    total_accounts              INT,
-    total_cards                 INT,
-    total_loans                 INT,
-    has_credit_card             INT,
-    has_savings                 INT,
-    has_loan                    INT,
-    total_deposit_balance       DECIMAL(18,2),
-    total_loan_outstanding      DECIMAL(18,2),
-    aum_total                   DECIMAL(18,2),
-    aum_bucket                  STRING,
-    txn_count_30d               BIGINT,
-    txn_amount_30d              DECIMAL(18,2),
-    last_txn_date               TIMESTAMP,
-    days_since_last_txn         INT,
-    primary_channel             STRING,
-    interaction_count_90d       BIGINT,
-    last_interaction_date       TIMESTAMP,
-    rfm_recency_score           INT,
-    rfm_frequency_score         INT,
-    rfm_monetary_score          INT,
-    rfm_segment                 STRING,
-    churn_flag                  INT,
-    churn_risk                  STRING,
-    is_churn_candidate          INT,
-    cross_sell_credit_card_flag INT,
-    no_credit_card              INT,
-    no_deposit                  INT,
-    no_loan                     INT,
-    cross_sell_score            INT,
-    recommended_product         STRING,
-    recommendation_reason       STRING,
-    campaign_priority           STRING,
-    contact_eligible_flag       INT,
-    suppression_reason          STRING,
-    campaign_type               STRING,
-    cob_dt                      DATE
 )
 USING iceberg
 PARTITIONED BY (days(cob_dt))
@@ -870,7 +749,6 @@ _ENSURE_NAMESPACES = [
     "CREATE NAMESPACE IF NOT EXISTS lakehouse.bronze",
     "CREATE NAMESPACE IF NOT EXISTS lakehouse.silver",
     "CREATE NAMESPACE IF NOT EXISTS lakehouse.gold",
-    "CREATE NAMESPACE IF NOT EXISTS lakehouse.sandbox",
 ]
 
 
@@ -893,9 +771,9 @@ def _build_drop_sequence(layer: str) -> list[str]:
     if layer == "silver":
         return _DROP_SILVER
     if layer == "gold":
-        return _DROP_SANDBOX + _DROP_GOLD
+        return _DROP_GOLD
     # all — thứ tự an toàn: gold → silver → bronze
-    return _DROP_SANDBOX + _DROP_GOLD + _DROP_SILVER + _DROP_BRONZE
+    return _DROP_GOLD + _DROP_SILVER + _DROP_BRONZE
 
 
 def _build_create_sequence(layer: str) -> list[str]:
@@ -905,9 +783,9 @@ def _build_create_sequence(layer: str) -> list[str]:
     if layer == "silver":
         return _CREATE_SILVER
     if layer == "gold":
-        return _CREATE_GOLD + _CREATE_SANDBOX
+        return _CREATE_GOLD
     # all
-    return _CREATE_BRONZE + _CREATE_SILVER + _CREATE_GOLD + _CREATE_SANDBOX
+    return _CREATE_BRONZE + _CREATE_SILVER + _CREATE_GOLD
 
 
 def reset_layer(spark, layer: str) -> None:
