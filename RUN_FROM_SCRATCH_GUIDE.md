@@ -30,7 +30,17 @@ Các service local sau sẽ được mở sau khi stack chạy:
 
 ## 2. Chuẩn bị cấu hình local
 
-Copy hai file cấu hình mẫu. Không commit hai file thật này lên Git.
+Khi nộp hoặc clone source code, repository chỉ nên có file mẫu
+`docker/.env.example` và `data_generator/config.example.yaml`. Hai file runtime
+`docker/.env` và `data_generator/config.yaml` bị Git ignore vì chứa password,
+secret và cấu hình local.
+
+Xử lý theo tình huống:
+
+- Nếu đã có `docker/.env` hoặc `data_generator/config.yaml` trên máy local, giữ
+  nguyên file đó và chỉ kiểm tra lại giá trị bên trong.
+- Nếu chưa có, tạo file runtime từ file mẫu bằng các lệnh bên dưới.
+- Không commit `docker/.env` và `data_generator/config.yaml` lên Git.
 
 Windows PowerShell:
 
@@ -624,6 +634,14 @@ dashboard mẫu:
 ```powershell
 docker exec superset bash -lc ". /app/.venv/bin/activate && python /app/docker/create_customer360_dashboard.py"
 ```
+
+Script này tạo/cập nhật dashboard `Customer 360 Lakehouse` không có native filter. Dashboard dùng trực tiếp
+serving mart `lakehouse.sandbox.mart_customer_360_dashboard` do pipeline trong repo publish cho snapshot demo
+`2026-01-01`; các CSV đã export gọn để đối chiếu nằm tại `exports/trino_csv/`.
+
+Các chart chính gồm KPI cards, RFM Segment Distribution, AUM by Branch, Recommended Product Mix,
+Campaign Priority, Churn Risk, Cross-sell Score Distribution, Product Penetration và Customer Drill-down.
+KPI cards dùng CSS theo chart id thực tế nên icon vẫn hiện sau khi script upsert lại chart.
 
 Smoke test dataset Superset:
 

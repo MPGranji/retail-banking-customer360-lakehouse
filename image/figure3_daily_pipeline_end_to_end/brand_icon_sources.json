@@ -1,0 +1,16 @@
+{
+  "diagram_sources": [
+    "lakehouse_etl/airflow/dags/lakehouse_daily_pipeline_dag.py",
+    "lakehouse_etl/docs/implementation_changes/12_daily_pipeline_productionization_changes.md"
+  ],
+  "icon_sources": {
+    "airflow": "https://commons.wikimedia.org/wiki/Special:Redirect/file/AirflowLogo.svg",
+    "spark": "https://api.iconify.design/logos:apache-spark.svg",
+    "oracle": "https://api.iconify.design/simple-icons:oracle.svg?color=%23F80000",
+    "postgres": "https://api.iconify.design/logos:postgresql.svg",
+    "shield": "https://api.iconify.design/lucide:shield-check.svg?color=%230f9f6e",
+    "check": "https://api.iconify.design/lucide:circle-check-big.svg?color=%237c3aed",
+    "dashboard": "https://api.iconify.design/lucide:layout-dashboard.svg?color=%234f46e5",
+    "database": "https://api.iconify.design/lucide:database.svg?color=%230891b2"
+  }
+}

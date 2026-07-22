@@ -1,6 +1,6 @@
 -- Controlled day-2 changes for the SCD2 history demonstration.
 -- Run only after the 2025-12-31 Bronze/Silver baseline has been accepted.
--- The statements are idempotent for the generated demo dataset.
+-- The statements are idempotent for the seeded demo dataset.
 
 WHENEVER SQLERROR EXIT SQL.SQLCODE ROLLBACK
 SET SERVEROUTPUT ON

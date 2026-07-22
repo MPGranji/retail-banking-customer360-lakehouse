@@ -18,8 +18,8 @@ Mở [http://localhost:8888](http://localhost:8888) và chọn kernel **PySpark 
    - Viết theo hướng SQL-first: logic nghiệm thu nằm trong Spark SQL; Python chỉ gọi query và dừng khi có `FAIL`.
    - Kiểm tra duplicate current row/SK, date range và overlap.
    - Kiểm tra version cũ/mới của bốn test keys.
-   - Chứng minh thay đổi riêng `last_updated` không tạo version.
-   - Chụp fingerprint trước và sau rerun để chứng minh idempotency.
+   - Kiểm tra thay đổi riêng `last_updated` không tạo version.
+   - Chụp fingerprint trước và sau rerun để kiểm tra idempotency.
 
 ## Nghiệm thu Customer 360 Gold
 
