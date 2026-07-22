@@ -1,0 +1,40 @@
+{
+  "catalogs": [
+    {"user": "data_engineer", "catalog": "lakehouse", "allow": "all"},
+    {"user": "marketing", "catalog": "lakehouse", "allow": "read-only"},
+    {"user": "(data_engineer|marketing)", "catalog": "system", "allow": "read-only"},
+    {"catalog": ".*", "allow": "none"}
+  ],
+  "schemas": [
+    {"user": "data_engineer", "catalog": "lakehouse", "schema": ".*", "owner": true},
+    {"user": "marketing", "catalog": "lakehouse", "schema": ".*", "owner": false},
+    {"owner": false}
+  ],
+  "tables": [
+    {
+      "user": "data_engineer",
+      "catalog": "lakehouse",
+      "schema": ".*",
+      "table": ".*",
+      "privileges": ["SELECT", "INSERT", "DELETE", "UPDATE", "OWNERSHIP"]
+    },
+    {
+      "user": "marketing",
+      "catalog": "lakehouse",
+      "schema": "sandbox",
+      "table": ".*",
+      "privileges": ["SELECT"]
+    },
+    {"user": "marketing", "catalog": "lakehouse", "schema": ".*", "table": ".*", "privileges": []},
+    {"privileges": []}
+  ],
+  "queries": [
+    {"user": "data_engineer", "allow": ["execute", "view", "kill"]},
+    {"user": "marketing", "allow": ["execute"]},
+    {"allow": []}
+  ],
+  "system_information": [
+    {"user": "data_engineer", "allow": ["read"]},
+    {"allow": []}
+  ]
+}
