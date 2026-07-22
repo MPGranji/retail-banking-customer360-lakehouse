@@ -4,7 +4,6 @@ job:
 source:
   tables:
     - bronze.card_txn
-    - silver.dim_card
     - silver.dim_customer
 
 target:
@@ -14,6 +13,10 @@ target:
 
 business_key:
   - txn_id
+
+load:
+  mode: daily
+  partition_column: cob_dt
 
 sql: |
   SELECT
@@ -34,4 +37,5 @@ sql: |
   FROM lakehouse.bronze.card_txn t
   LEFT JOIN lakehouse.silver.dim_customer c
       ON t.customer_id = c.customer_id
-      AND c.is_current = 1
+      AND CAST(t.txn_date AS DATE) BETWEEN c.effective_from AND c.effective_to
+  WHERE t.cob_dt = DATE '{{ cob_dt }}'

@@ -61,8 +61,8 @@ dag = DAG(
                 "Tầng cần reset (DROP PURGE + CREATE):\n"
                 "  bronze — 10 bảng bronze\n"
                 "  silver — 10 bảng silver\n"
-                "  gold   — 10 bảng gold\n"
-                "  all    — toàn bộ 30 bảng\n"
+                "  gold   — 11 bảng gold\n"
+                "  all    — toàn bộ 31 bảng\n"
                 "CẢNH BÁO: Xóa toàn bộ data, không thể hoàn tác."
             ),
         )
