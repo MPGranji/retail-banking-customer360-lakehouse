@@ -12,62 +12,40 @@ target:
   schema: gold
   table: customer_card_summary
 
-write:
-  strategy: overwrite_partitions
-
 upstream_flags:
   - silver.dim_customer
   - silver.dim_card
   - silver.fact_card_txn
 
 sql: |
-  WITH customers AS (
-      SELECT customer_id, customer_sk
-      FROM lakehouse.silver.dim_customer
-      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
-  ),
-  card_agg AS (
-      SELECT
-          customer_id,
-          COUNT(DISTINCT card_id) AS total_cards,
-          COUNT(DISTINCT CASE WHEN card_type = 'CREDIT' AND status = 'ACTIVE' THEN card_id END)
-              AS cnt_credit_active,
-          COUNT(DISTINCT CASE WHEN card_type = 'DEBIT' AND status = 'ACTIVE' THEN card_id END)
-              AS cnt_debit_active,
-          MAX(CASE WHEN card_type = 'CREDIT' THEN credit_limit END) AS max_credit_limit
-      FROM lakehouse.silver.dim_card
-      GROUP BY customer_id
-  ),
-  transaction_agg AS (
-      SELECT
-          customer_id,
-          COUNT(txn_id) AS total_card_txn_count_30d,
-          SUM(txn_amount) AS total_card_txn_amount_30d,
-          AVG(txn_amount) AS avg_card_txn_amount_30d,
-          COUNT(DISTINCT merchant_category) AS distinct_merchant_categories,
-          MAX(txn_date) AS last_card_txn_date
-      FROM lakehouse.silver.fact_card_txn
-      WHERE CAST(txn_date AS DATE) >= DATE_ADD(DATE '{{ cob_dt }}', -30)
-        AND CAST(txn_date AS DATE) <= DATE '{{ cob_dt }}'
-        AND status = 'SUCCESS'
-        AND txn_type NOT IN ('REFUND', 'REVERSAL')
-      GROUP BY customer_id
-  )
   SELECT
       c.customer_id,
       c.customer_sk,
-      CAST(COALESCE(cd.total_cards, 0) AS INT) AS total_cards,
-      CAST(COALESCE(cd.cnt_credit_active, 0) AS INT) AS cnt_credit_active,
-      CAST(COALESCE(cd.cnt_debit_active, 0) AS INT) AS cnt_debit_active,
-      CAST(ROUND(COALESCE(cd.max_credit_limit, 0), 2) AS DECIMAL(18,2)) AS max_credit_limit,
-      COALESCE(t.total_card_txn_count_30d, 0) AS total_card_txn_count_30d,
-      CAST(ROUND(COALESCE(t.total_card_txn_amount_30d, 0), 2) AS DECIMAL(18,2))
-          AS total_card_txn_amount_30d,
-      CAST(ROUND(COALESCE(t.avg_card_txn_amount_30d, 0), 2) AS DECIMAL(18,2))
-          AS avg_card_txn_amount_30d,
-      CAST(COALESCE(t.distinct_merchant_categories, 0) AS INT) AS distinct_merchant_categories,
-      t.last_card_txn_date,
-      DATE '{{ cob_dt }}' AS cob_dt
-  FROM customers c
-  LEFT JOIN card_agg cd ON c.customer_id = cd.customer_id
-  LEFT JOIN transaction_agg t ON c.customer_id = t.customer_id
+      -- Thống kê thẻ (join bởi customer_id)
+      COUNT(DISTINCT cd.card_id)                                                         AS total_cards,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                          AND cd.status = 'ACTIVE'  THEN cd.card_id END)                AS cnt_credit_active,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'DEBIT'
+                          AND cd.status = 'ACTIVE'  THEN cd.card_id END)                AS cnt_debit_active,
+      MAX(CASE WHEN cd.card_type = 'CREDIT' THEN cd.credit_limit END)                  AS max_credit_limit,
+      -- Giao dịch thẻ 30 ngày
+      COUNT(DISTINCT t.txn_id)                                                          AS total_card_txn_count_30d,
+      COALESCE(SUM(CASE WHEN t.txn_type NOT IN ('REFUND','REVERSAL')
+                        THEN t.txn_amount ELSE 0 END), 0)                              AS total_card_txn_amount_30d,
+      COALESCE(AVG(CASE WHEN t.txn_type NOT IN ('REFUND','REVERSAL')
+                        THEN t.txn_amount END), 0)                                     AS avg_card_txn_amount_30d,
+      COUNT(DISTINCT t.merchant_category)                                               AS distinct_merchant_categories,
+      MAX(t.txn_date)                                                                   AS last_card_txn_date,
+      DATE '{{ cob_dt }}'                                                                       AS cob_dt
+  FROM lakehouse.silver.dim_customer c
+  LEFT JOIN lakehouse.silver.dim_card cd
+      ON c.customer_id = cd.customer_id
+  LEFT JOIN lakehouse.silver.fact_card_txn t
+      ON c.customer_id = t.customer_id
+      AND t.txn_date >= DATE_ADD(DATE '{{ cob_dt }}', -30)
+      AND t.txn_date <= DATE '{{ cob_dt }}'
+      AND t.status = 'SUCCESS'
+  WHERE c.is_current = 1
+  GROUP BY
+      c.customer_id,
+      c.customer_sk

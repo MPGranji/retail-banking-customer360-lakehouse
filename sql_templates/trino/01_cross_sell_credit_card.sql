@@ -33,5 +33,6 @@ WHERE has_credit_card = 0
   AND rfm_segment IN ('Champions', 'Loyal Customers')
   AND days_since_last_txn <= 30
   AND primary_branch_code LIKE 'HCM%'
+  AND cob_dt = DATE '2025-12-31'                              -- thay bằng ngày cần query
 ORDER BY aum_total DESC
 LIMIT 1000;

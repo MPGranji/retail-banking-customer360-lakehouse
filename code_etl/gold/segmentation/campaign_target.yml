@@ -6,145 +6,58 @@ source:
     - gold.rfm_segment
     - gold.churn_prediction
     - gold.cross_sell_segment
-    - gold.mart_customer_360_history
-    - silver.fact_crm_interaction
+    - gold.mart_customer_360
 
 target:
   catalog: lakehouse
   schema: gold
   table: campaign_target
 
-write:
-  strategy: overwrite_partitions
-
 upstream_flags:
   - gold.rfm_segment
   - gold.churn_prediction
   - gold.cross_sell_segment
-  - gold.mart_customer_360_history
+  - gold.mart_customer_360
 
 sql: |
-  WITH open_complaints AS (
-      SELECT
-          customer_id,
-          COUNT(*) AS open_complaint_count
-      FROM lakehouse.silver.fact_crm_interaction
-      WHERE CAST(interaction_date AS DATE) <= DATE '{{ cob_dt }}'
-        AND UPPER(category) = 'COMPLAINT'
-        AND COALESCE(UPPER(status), 'UNKNOWN') NOT IN ('CLOSED', 'RESOLVED')
-      GROUP BY customer_id
-  ), base AS (
-      SELECT
-          r.customer_id,
-          r.customer_sk,
-          r.rfm_segment,
-          r.rfm_score,
-          r.recency_days,
-          r.frequency,
-          r.monetary,
-          ch.churn_risk,
-          ch.is_churn_candidate,
-          ch.days_since_last_txn,
-          m.customer_segment,
-          m.kyc_status,
-          m.aum_total,
-          m.aum_bucket,
-          m.primary_branch_code,
-          cs.primary_opportunity,
-          cs.no_credit_card,
-          cs.no_deposit,
-          cs.no_loan,
-          COALESCE(oc.open_complaint_count, 0) AS open_complaint_count,
-          CASE WHEN cs.no_credit_card = 1 THEN 30 ELSE 0 END
-            + CASE WHEN m.aum_total >= 100000000 THEN 25 ELSE 0 END
-            + CASE WHEN r.rfm_segment IN ('Champions', 'Loyal Customers') THEN 20 ELSE 0 END
-            + CASE WHEN ch.days_since_last_txn <= 30 THEN 15 ELSE 0 END
-            + CASE WHEN UPPER(m.customer_segment) IN ('PRIORITY', 'VIP') THEN 10 ELSE 0 END
-            - CASE WHEN UPPER(COALESCE(m.kyc_status, 'UNKNOWN')) <> 'VERIFIED' THEN 30 ELSE 0 END
-            - CASE WHEN ch.churn_risk = 'High' OR COALESCE(oc.open_complaint_count, 0) > 0
-                   THEN 20 ELSE 0 END AS raw_cross_sell_score
-      FROM lakehouse.gold.rfm_segment r
-      LEFT JOIN lakehouse.gold.churn_prediction ch
-          ON r.customer_id = ch.customer_id AND r.cob_dt = ch.cob_dt
-      LEFT JOIN lakehouse.gold.cross_sell_segment cs
-          ON r.customer_id = cs.customer_id AND r.cob_dt = cs.cob_dt
-      LEFT JOIN lakehouse.gold.mart_customer_360_history m
-          ON r.customer_id = m.customer_id AND r.cob_dt = m.cob_dt
-      LEFT JOIN open_complaints oc
-          ON r.customer_id = oc.customer_id
-      WHERE r.cob_dt = DATE '{{ cob_dt }}'
-  ), scored AS (
-      SELECT
-          *,
-          CAST(GREATEST(0, LEAST(100, raw_cross_sell_score)) AS INT) AS cross_sell_score,
-          CASE
-              WHEN is_churn_candidate = 1 AND rfm_segment IN ('At Risk', 'Hibernating')
-                  THEN 'RETENTION_OFFER'
-              WHEN no_credit_card = 1 THEN 'CREDIT_CARD'
-              WHEN no_deposit = 1 THEN 'TERM_DEPOSIT'
-              WHEN no_loan = 1 THEN 'PERSONAL_LOAN'
-              WHEN UPPER(customer_segment) IN ('PRIORITY', 'VIP') THEN 'WEALTH_MANAGEMENT'
-              ELSE 'DIGITAL_SAVINGS'
-          END AS recommended_product,
-          COALESCE(NULLIF(CONCAT_WS('; ',
-              CASE WHEN no_credit_card = 1 THEN 'No credit card (+30)' END,
-              CASE WHEN aum_total >= 100000000 THEN 'AUM at least 100m (+25)' END,
-              CASE WHEN rfm_segment IN ('Champions', 'Loyal Customers') THEN 'High-value RFM (+20)' END,
-              CASE WHEN days_since_last_txn <= 30 THEN 'Active in last 30 days (+15)' END,
-              CASE WHEN UPPER(customer_segment) IN ('PRIORITY', 'VIP') THEN 'Priority/VIP (+10)' END,
-              CASE WHEN UPPER(COALESCE(kyc_status, 'UNKNOWN')) <> 'VERIFIED' THEN 'KYC not verified (-30)' END,
-              CASE
-                  WHEN churn_risk = 'High' AND open_complaint_count > 0 THEN 'High churn risk and open complaint (-20)'
-                  WHEN churn_risk = 'High' THEN 'High churn risk (-20)'
-                  WHEN open_complaint_count > 0 THEN 'Open complaint (-20)'
-              END
-          ), ''), 'Baseline product fit') AS recommendation_reason
-      FROM base
-  )
   SELECT
-      customer_id,
-      customer_sk,
-      rfm_segment,
-      rfm_score,
-      recency_days,
-      frequency,
-      monetary,
-      churn_risk,
-      is_churn_candidate,
-      days_since_last_txn,
-      customer_segment,
-      aum_total,
-      aum_bucket,
-      primary_branch_code,
-      primary_opportunity,
-      no_credit_card,
-      no_deposit,
-      no_loan,
-      cross_sell_score,
-      recommended_product,
-      recommendation_reason,
+      r.customer_id,
+      r.customer_sk,
+      -- RFM context
+      r.rfm_segment,
+      r.rfm_score,
+      r.recency_days,
+      r.frequency,
+      r.monetary,
+      -- Churn risk
+      ch.churn_risk,
+      ch.is_churn_candidate,
+      ch.days_since_last_txn,
+      -- Customer profile
+      m.customer_segment,
+      m.aum_total,
+      m.aum_bucket,
+      m.primary_branch_code,
+      -- Cross-sell
+      cs.primary_opportunity,
+      cs.no_credit_card,
+      cs.no_deposit,
+      cs.no_loan,
+      -- Campaign type priority
       CASE
-          WHEN UPPER(COALESCE(kyc_status, 'UNKNOWN')) <> 'VERIFIED'
-               OR open_complaint_count > 0 THEN 'LOW'
-          WHEN cross_sell_score >= 70 THEN 'HIGH'
-          WHEN cross_sell_score >= 40 THEN 'MEDIUM'
-          ELSE 'LOW'
-      END AS campaign_priority,
-      CASE
-          WHEN UPPER(COALESCE(kyc_status, 'UNKNOWN')) = 'VERIFIED'
-               AND open_complaint_count = 0 THEN 1 ELSE 0
-      END AS contact_eligible_flag,
-      CASE
-          WHEN UPPER(COALESCE(kyc_status, 'UNKNOWN')) <> 'VERIFIED' THEN 'KYC_NOT_VERIFIED'
-          WHEN open_complaint_count > 0 THEN 'OPEN_COMPLAINT'
-          ELSE NULL
-      END AS suppression_reason,
-      CASE
-          WHEN is_churn_candidate = 1 AND rfm_segment IN ('At Risk', 'Hibernating') THEN 'Retention'
-          WHEN recommended_product = 'CREDIT_CARD' THEN 'Cross_Sell_CC'
-          WHEN recommended_product IN ('TERM_DEPOSIT', 'PERSONAL_LOAN') THEN 'Cross_Sell'
-          WHEN rfm_segment IN ('Champions', 'Loyal Customers') THEN 'Upsell'
+          WHEN ch.is_churn_candidate = 1
+               AND r.rfm_segment IN ('At Risk', 'Hibernating')   THEN 'Retention'
+          WHEN cs.no_credit_card = 1
+               AND m.aum_bucket IN ('AFFLUENT','PRIORITY','VIP') THEN 'Cross_Sell_CC'
+          WHEN cs.primary_opportunity != 'None'                   THEN 'Cross_Sell'
+          WHEN r.rfm_segment IN ('Champions', 'Loyal Customers')  THEN 'Upsell'
           ELSE 'Awareness'
       END AS campaign_type,
       DATE '{{ cob_dt }}' AS cob_dt
-  FROM scored
+  FROM lakehouse.gold.rfm_segment r
+  LEFT JOIN lakehouse.gold.churn_prediction ch
+      ON r.customer_id = ch.customer_id
+  LEFT JOIN lakehouse.gold.cross_sell_segment cs
+      ON r.customer_id = cs.customer_id
+  LEFT JOIN lakehouse.gold.mart_customer_360 m
+      ON r.customer_id = m.customer_id

@@ -5,11 +5,11 @@ Luồng thực thi:
   1. dag_start ghi cờ R
   2. Kiểm tra silver_all_dag đã hoàn thành
   3. Chạy song song 3 seg jobs (rfm, churn, cross_sell)
-  4. Kiểm tra gold_mart360_dag đã hoàn thành (campaign_target cần mart_customer_360_history)
-  5. Chạy campaign_target và rule-based Next Best Offer
+  4. Kiểm tra gold_mart360_dag đã hoàn thành (campaign_target cần mart_customer_360)
+  5. Chạy campaign_target
   6. dag_end ghi cờ S
 
-DATA_COB_DT nhận từ manual Param ``cob_dt``.
+DATA_COB_DT: hard-coded theo ngày load dữ liệu fake — thay đổi khi re-generate data.
 Trigger sau khi gold_mart360_dag đã hoàn thành.
 """
 
@@ -21,20 +21,11 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 from airflow.utils.task_group import TaskGroup
 
-from etl_flag import (
-    PIPELINE_RUN_ID_TEMPLATE,
-    PROCESSING_DATE_TEMPLATE,
-    latest_success_sql,
-    make_end_flag_task,
-    make_failure_callback,
-    make_start_flag_task,
-    processing_run_params,
-)
+from etl_flag import make_start_flag_task, make_end_flag_task
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 DAG_ID           = "gold_segmentation_dag"
-DATA_COB_DT      = PROCESSING_DATE_TEMPLATE
-PIPELINE_RUN_ID  = PIPELINE_RUN_ID_TEMPLATE
+DATA_COB_DT      = "2025-12-31"   # ngày cuối của đợt data fake — cập nhật khi re-gen
 POSTGRES_CONN_ID = "postgres-etl"
 SPARK_CONN_ID    = "spark_default"
 GOLD_BASE        = "/opt/project/code_etl/gold"
@@ -64,19 +55,23 @@ SEG_JOBS = [
 
 
 def _check_dag_flag_sql(upstream_dag_id: str) -> str:
-    return latest_success_sql(upstream_dag_id, DATA_COB_DT, PIPELINE_RUN_ID)
+    return (
+        "SELECT 1 FROM opslakehouse.flag_job_etl "
+        f"WHERE job_name = '{upstream_dag_id}' "
+        "  AND status = 'S' "
+        f"  AND cob_dt = DATE '{DATA_COB_DT}' "
+        "LIMIT 1"
+    )
 
 
 # ─── DAG ──────────────────────────────────────────────────────────────────────
 dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="Gold segmentation — RFM, churn, cross-sell và explainable NBO campaign target",
+    description="Gold segmentation — rfm, churn, cross_sell → campaign_target (manual build)",
     schedule_interval=None,   # trigger thủ công, sau khi gold_mart360_dag xong
     catchup=False,
     max_active_tasks=1,
-    params=processing_run_params(),
-    on_failure_callback=make_failure_callback(DAG_ID, "gold"),
     tags=["gold", "segmentation", "manual"],
 )
 
@@ -110,7 +105,7 @@ with TaskGroup("segments", dag=dag) as segments_group:
             dag=dag,
         )
 
-# ── 4. Kiểm tra gold_mart360_dag (campaign_target cần history snapshot) ──────
+# ── 4. Kiểm tra gold_mart360_dag (campaign_target cần mart_customer_360) ──────
 check_mart360 = SqlSensor(
     task_id="check_gold_mart360_dag",
     conn_id=POSTGRES_CONN_ID,

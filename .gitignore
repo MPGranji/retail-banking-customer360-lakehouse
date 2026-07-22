@@ -21,7 +21,6 @@ docs/
 # Jupyter
 .ipynb_checkpoints/
 *.ipynb
-!notebooks/*.ipynb
 
 # IDEs
 .idea/

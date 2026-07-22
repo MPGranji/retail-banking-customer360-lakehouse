@@ -23,6 +23,7 @@ SELECT
     COUNT(CASE WHEN has_credit_card = 0 THEN 1 END)   AS no_credit_card_cnt,
     COUNT(CASE WHEN churn_flag = 1 THEN 1 END)        AS churn_flag_cnt
 FROM lakehouse.sandbox.mart_customer_360_masked
+WHERE cob_dt = DATE '2025-12-31'
 GROUP BY rfm_segment
 ORDER BY
     CASE rfm_segment

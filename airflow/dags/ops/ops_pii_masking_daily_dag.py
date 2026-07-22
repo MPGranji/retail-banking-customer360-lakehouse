@@ -1,8 +1,7 @@
 """
 Ops DAG - PII Masking (daily).
 Tao/refresh cac bang masked sau khi gold layer hoan tat.
-sandbox.mart_customer_360_masked, sandbox.dim_customer_masked va
-sandbox.mart_customer_360_dashboard.
+sandbox.mart_customer_360_masked va sandbox.dim_customer_masked.
 """
 
 from datetime import timedelta
@@ -13,21 +12,12 @@ from airflow.providers.apache.spark.operators.spark_submit import SparkSubmitOpe
 from airflow.providers.common.sql.sensors.sql import SqlSensor
 import pendulum
 
-from etl_flag import (
-    PIPELINE_RUN_ID_TEMPLATE,
-    PROCESSING_DATE_TEMPLATE,
-    latest_success_sql,
-    make_end_flag_task,
-    make_failure_callback,
-    make_start_flag_task,
-    processing_run_params,
-)
+from etl_flag import make_start_flag_task, make_end_flag_task
 
 DAG_ID               = "ops_pii_masking_daily_dag"
 APPLICATION_PATH           = "/opt/project/code_etl/shared/ops/pii_masking.py"
 POSTGRES_ETL_CONN_ID = "postgres-etl"
-COB_DT               = PROCESSING_DATE_TEMPLATE
-PIPELINE_RUN_ID      = PIPELINE_RUN_ID_TEMPLATE
+COB_DT               = "2025-12-31"
 
 DEFAULT_ARGS = {
     "owner": "Granji",
@@ -48,12 +38,10 @@ PII_ENV = {"PII_HASH_SALT": Variable.get("pii_hash_salt", default_var="")}
 dag = DAG(
     DAG_ID,
     default_args=DEFAULT_ARGS,
-    description="Daily PII masking and dashboard serving publish",
+    description="Daily PII masking - tao sandbox.mart_customer_360_masked va sandbox.dim_customer_masked",
     schedule_interval=None,   # sau khi gold hoan tat
     catchup=False,
     max_active_tasks=1,
-    params=processing_run_params(),
-    on_failure_callback=make_failure_callback(DAG_ID, "ops"),
     tags=["ops", "pii", "masking", "compliance"],
 )
 
@@ -61,17 +49,13 @@ dag = DAG(
 wait_gold_360 = SqlSensor(
     task_id="wait_gold_mart360_dag",
     conn_id=POSTGRES_ETL_CONN_ID,
-    sql=latest_success_sql("gold_mart360_dag", COB_DT, PIPELINE_RUN_ID),
-    poke_interval=120,
-    timeout=7200,
-    mode="reschedule",
-    dag=dag,
-)
-
-wait_gold_segmentation = SqlSensor(
-    task_id="wait_gold_segmentation_dag",
-    conn_id=POSTGRES_ETL_CONN_ID,
-    sql=latest_success_sql("gold_segmentation_dag", COB_DT, PIPELINE_RUN_ID),
+    sql=(
+        "SELECT 1 FROM opslakehouse.flag_job_etl "
+        "WHERE job_name = 'gold_mart360_dag' "
+        "  AND status = 'S' "
+        f"  AND cob_dt = '{COB_DT}' "
+        "LIMIT 1"
+    ),
     poke_interval=120,
     timeout=7200,
     mode="reschedule",
@@ -81,7 +65,13 @@ wait_gold_segmentation = SqlSensor(
 wait_silver_customer = SqlSensor(
     task_id="wait_silver_all_dag",
     conn_id=POSTGRES_ETL_CONN_ID,
-    sql=latest_success_sql("silver_all_dag", COB_DT, PIPELINE_RUN_ID),
+    sql=(
+        "SELECT 1 FROM opslakehouse.flag_job_etl "
+        "WHERE job_name = 'silver_all_dag' "
+        "  AND status = 'S' "
+        f"  AND cob_dt = '{COB_DT}' "
+        "LIMIT 1"
+    ),
     poke_interval=120,
     timeout=7200,
     mode="reschedule",
@@ -112,18 +102,6 @@ mask_mart_360 = SparkSubmitOperator(
     dag=dag,
 )
 
-publish_dashboard_mart = SparkSubmitOperator(
-    task_id="publish_dashboard_mart",
-    application=APPLICATION_PATH,
-    conn_id="spark_default",
-    conf=SPARK_CONF,
-    env_vars=PII_ENV,
-    application_args=["--cob_dt", COB_DT, "--target", "dashboard"],
-    verbose=True,
-    dag=dag,
-)
-
 end = make_end_flag_task("end", DAG_ID, "ops", dag, cob_dt=COB_DT)
 
-[wait_gold_360, wait_gold_segmentation, wait_silver_customer] >> start
-start >> [mask_dim_customer, mask_mart_360, publish_dashboard_mart] >> end
+[wait_gold_360, wait_silver_customer] >> start >> [mask_dim_customer, mask_mart_360] >> end

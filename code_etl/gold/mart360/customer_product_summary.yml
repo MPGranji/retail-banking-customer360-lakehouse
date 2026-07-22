@@ -14,9 +14,6 @@ target:
   schema: gold
   table: customer_product_summary
 
-write:
-  strategy: overwrite_partitions
-
 upstream_flags:
   - silver.dim_customer
   - silver.dim_account
@@ -25,69 +22,47 @@ upstream_flags:
   - silver.dim_loan
 
 sql: |
-  WITH customers AS (
-      SELECT customer_id, customer_sk
-      FROM lakehouse.silver.dim_customer
-      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
-  ),
-  account_agg AS (
-      SELECT
-          customer_id,
-          COUNT(DISTINCT account_id) AS total_accounts,
-          COUNT(DISTINCT CASE WHEN account_type = 'CASA' AND status = 'ACTIVE' THEN account_id END)
-              AS cnt_casa_active,
-          COUNT(DISTINCT CASE WHEN account_type = 'TIME_DEPOSIT' AND status = 'ACTIVE' THEN account_id END)
-              AS cnt_td_active
-      FROM lakehouse.silver.dim_account
-      WHERE DATE '{{ cob_dt }}' BETWEEN effective_from AND effective_to
-      GROUP BY customer_id
-  ),
-  deposit_agg AS (
-      SELECT
-          customer_id,
-          COUNT(DISTINCT deposit_id) AS cnt_deposits,
-          COUNT(DISTINCT CASE WHEN status = 'ACTIVE' THEN deposit_id END) AS cnt_deposits_active
-      FROM lakehouse.silver.dim_deposit
-      GROUP BY customer_id
-  ),
-  loan_agg AS (
-      SELECT
-          customer_id,
-          COUNT(DISTINCT loan_id) AS cnt_loans,
-          COUNT(DISTINCT CASE WHEN loan_status = 'ACTIVE' THEN loan_id END) AS cnt_loans_active
-      FROM lakehouse.silver.dim_loan
-      GROUP BY customer_id
-  ),
-  card_agg AS (
-      SELECT
-          customer_id,
-          COUNT(DISTINCT card_id) AS cnt_cards,
-          COUNT(DISTINCT CASE WHEN card_type = 'CREDIT' AND status = 'ACTIVE' THEN card_id END)
-              AS cnt_credit_cards,
-          COUNT(DISTINCT CASE WHEN card_type = 'DEBIT' AND status = 'ACTIVE' THEN card_id END)
-              AS cnt_debit_cards
-      FROM lakehouse.silver.dim_card
-      GROUP BY customer_id
-  )
   SELECT
       c.customer_id,
       c.customer_sk,
-      CAST(COALESCE(a.total_accounts, 0) AS INT) AS total_accounts,
-      CAST(COALESCE(a.cnt_casa_active, 0) AS INT) AS cnt_casa_active,
-      CAST(COALESCE(a.cnt_td_active, 0) AS INT) AS cnt_td_active,
-      CAST(COALESCE(d.cnt_deposits, 0) AS INT) AS cnt_deposits,
-      CAST(COALESCE(d.cnt_deposits_active, 0) AS INT) AS cnt_deposits_active,
-      CAST(COALESCE(l.cnt_loans, 0) AS INT) AS cnt_loans,
-      CAST(COALESCE(l.cnt_loans_active, 0) AS INT) AS cnt_loans_active,
-      CAST(COALESCE(cd.cnt_cards, 0) AS INT) AS cnt_cards,
-      CAST(COALESCE(cd.cnt_credit_cards, 0) AS INT) AS cnt_credit_cards,
-      CAST(COALESCE(cd.cnt_debit_cards, 0) AS INT) AS cnt_debit_cards,
-      CASE WHEN COALESCE(cd.cnt_credit_cards, 0) > 0 THEN 1 ELSE 0 END AS has_credit_card,
-      CASE WHEN COALESCE(d.cnt_deposits_active, 0) > 0 THEN 1 ELSE 0 END AS has_savings,
-      CASE WHEN COALESCE(l.cnt_loans_active, 0) > 0 THEN 1 ELSE 0 END AS has_loan,
-      DATE '{{ cob_dt }}' AS cob_dt
-  FROM customers c
-  LEFT JOIN account_agg a ON c.customer_id = a.customer_id
-  LEFT JOIN deposit_agg d ON c.customer_id = d.customer_id
-  LEFT JOIN loan_agg l ON c.customer_id = l.customer_id
-  LEFT JOIN card_agg cd ON c.customer_id = cd.customer_id
+      -- Tài khoản (account_type = 'CASA' hoặc 'TIME_DEPOSIT')
+      COUNT(DISTINCT a.account_id)                                                              AS total_accounts,
+      COUNT(DISTINCT CASE WHEN a.account_type = 'CASA'
+                          AND a.status = 'ACTIVE'        THEN a.account_id END)                AS cnt_casa_active,
+      COUNT(DISTINCT CASE WHEN a.account_type = 'TIME_DEPOSIT'
+                          AND a.status = 'ACTIVE'        THEN a.account_id END)                AS cnt_td_active,
+      -- Tiết kiệm
+      COUNT(DISTINCT d.deposit_id)                                                              AS cnt_deposits,
+      COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE'       THEN d.deposit_id END)               AS cnt_deposits_active,
+      -- Khoản vay
+      COUNT(DISTINCT l.loan_id)                                                                 AS cnt_loans,
+      COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE'  THEN l.loan_id END)                  AS cnt_loans_active,
+      -- Thẻ (join bởi customer_id, không qua account)
+      COUNT(DISTINCT cd.card_id)                                                                AS cnt_cards,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                          AND cd.status = 'ACTIVE'       THEN cd.card_id END)                  AS cnt_credit_cards,
+      COUNT(DISTINCT CASE WHEN cd.card_type = 'DEBIT'
+                          AND cd.status = 'ACTIVE'       THEN cd.card_id END)                  AS cnt_debit_cards,
+      -- Flags tổng hợp
+      CASE WHEN COUNT(DISTINCT CASE WHEN cd.card_type = 'CREDIT'
+                                    AND cd.status = 'ACTIVE' THEN cd.card_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_credit_card,
+      CASE WHEN COUNT(DISTINCT CASE WHEN d.status = 'ACTIVE' THEN d.deposit_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_savings,
+      CASE WHEN COUNT(DISTINCT CASE WHEN l.loan_status = 'ACTIVE' THEN l.loan_id END) > 0
+           THEN 1 ELSE 0 END                                                                   AS has_loan,
+      DATE '{{ cob_dt }}'                                                                             AS cob_dt
+  FROM lakehouse.silver.dim_customer c
+  LEFT JOIN lakehouse.silver.dim_account a
+      ON c.customer_id = a.customer_id
+      AND a.is_current = 1
+  LEFT JOIN lakehouse.silver.dim_deposit d
+      ON c.customer_id = d.customer_id
+  LEFT JOIN lakehouse.silver.dim_loan l
+      ON c.customer_id = l.customer_id
+  LEFT JOIN lakehouse.silver.dim_card cd
+      ON c.customer_id = cd.customer_id
+  WHERE c.is_current = 1
+  GROUP BY
+      c.customer_id,
+      c.customer_sk

@@ -1,10 +1,9 @@
 job:
-  type: scd_type2
+  type: scd_type1
 
 source:
   tables:
     - bronze.core_product
-  snapshot_mode: full
 
 target:
   catalog: lakehouse
@@ -13,22 +12,6 @@ target:
 
 business_key:
   - product_code
-
-scd:
-  type: 2
-  sk_column: product_sk
-  effective_from_column: effective_from
-  effective_to_column: effective_to
-  current_flag_column: is_current
-  detect_deletes: true
-
-tracked_columns:
-  - product_name
-  - product_group
-  - product_type
-  - currency
-  - is_active
-  - launch_date
 
 sql: |
   SELECT
