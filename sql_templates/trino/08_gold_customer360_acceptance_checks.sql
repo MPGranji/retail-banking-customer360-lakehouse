@@ -223,7 +223,7 @@ WHERE table_schema = 'sandbox'
   AND table_name = 'mart_customer_360_masked'
   AND column_name IN ('full_name', 'phone', 'email', 'cccd', 'address');
 
--- 11. Controlled customer demonstrates two distinct historical snapshots.
+-- 11. Controlled customer has two distinct historical snapshots.
 SELECT customer_id,
        cob_dt,
        primary_branch_code,
