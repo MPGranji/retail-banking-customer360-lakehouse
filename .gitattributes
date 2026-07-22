@@ -1,8 +1,12 @@
 * text=auto
 
+.gitattributes text eol=lf
 *.sh text eol=lf
 *.py text eol=lf
 *.sql text eol=lf
 *.yml text eol=lf
 *.yaml text eol=lf
 Dockerfile text eol=lf
+
+# Visual exports; keep them in the repo, but exclude them from GitHub language stats.
+image/**/*.html linguist-generated=true
